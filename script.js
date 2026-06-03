@@ -1,70 +1,127 @@
-// Targgit rebase --continueet a structural container in your HTML index to draw out components dynamically
-const timelineContainer = document.getElementById('timeline-app');
+document.addEventListener("DOMContentLoaded", () => {
+    const appContainer = document.getElementById("timeline-app");
 
-async function renderInteractiveTimeline() {
-    try {
-        if(timelineContainer) {
-            timelineContainer.innerHTML = `<p class="loading">Loading Timeline Data & Scraping Financial Frameworks...</p>`;
-        }
+    // Display a loading indicator while fetching the serverless API
+    appContainer.innerHTML = '<div class="loading">Fetching military assets and market analytics...</div>';
 
-        // Call the serverless Python script
-        const response = await fetch('/api/Pycode');
-        const data = await response.json();
+    fetch('/api/Pycode')
+        .then(response => {
+            if (!response.ok) throw new Error("Network response was not OK");
+            return response.json();
+        })
+        .then(data => {
+            // Clear the loading indicator
+            appContainer.innerHTML = "";
 
-        if (data.status !== "success") throw new Error("Data parsing failure.");
+            if (data.status === "success") {
+                data.timeline_data.forEach((event, index) => {
+                    // 1. Create a unique ID for the canvas graph elements
+                    const tsmcCanvasId = `chart-tsmc-${index}`;
+                    const taiexCanvasId = `chart-taiex-${index}`;
 
-        // Clear container to load compiled elements
-        timelineContainer.innerHTML = "";
+                    // 2. Build out the HTML structure for each card
+                    let hardwareHtml = "";
+                    for (const [name, specs] of Object.entries(event.hardware_and_tech_breakdown)) {
+                        hardwareHtml += `
+                            <div class="hardware-spec">
+                                <h4>${name} (${specs.category})</h4>
+                                <p><strong>Deep-Tech Components:</strong> ${specs.components.join(", ")}</p>
+                                <p><strong>Avionics & Sensors:</strong> <span class="highlight-tech">${specs.chips_sensors.join(", ")}</span></p>
+                                <p><strong>Advanced Materials:</strong> ${specs.materials.join(", ")}</p>
+                            </div>
+                        `;
+                    }
 
-        // Build HTML components dynamically
-        data.timeline_data.forEach(event => {
-            const eventElement = document.createElement('div');
-            eventElement.className = 'timeline-card';
+                    const cardHtml = `
+                        <div class="timeline-card">
+                            <div class="timeline-header">
+                                <h2>${event.exercise}</h2>
+                                <span class="badge-date">${event.date}</span>
+                            </div>
+                            <p class="summary-text">${event.context}</p>
+                            
+                            <div class="tech-breakdown-section">
+                                <h3>Frontline Hardware & Semiconductor Vector Breakdown</h3>
+                                ${hardwareHtml}
+                            </div>
 
-            // 1. Title and Context Header
-            let hardwareHTML = '';
-            
-            // Loop through nested hardware tech components sent by Python
-            for (const [hardwareName, techDetails] of Object.entries(event.hardware_and_tech_breakdown)) {
-                hardwareHTML += `
-                    <div class="hardware-spec">
-                        <h4>✈️ Hull/Platform: ${hardwareName} (${techDetails.category})</h4>
-                        <p><strong>Advanced Materials:</strong> ${techDetails.materials.join(', ')}</p>
-                        <p><strong>Sub-systems & Components:</strong> ${techDetails.components.join(', ')}</p>
-                        <p><strong>Chips, Radars & Sensors:</strong> <span class="highlight-tech">${techDetails.chips_sensors.join(', ')}</span></p>
-                    </div>
-                `;
+                            <div class="market-box">
+                                <h3>Market Volatility & Resilience Tracking</h3>
+                                <p>${event.market_analytics.summary}</p>
+                                
+                                <div style="margin-top: 20px; background: #1f242c; padding: 15px; border-radius: 6px;">
+                                    <canvas id="${tsmcCanvasId}"></canvas>
+                                </div>
+                                <div style="margin-top: 20px; background: #1f242c; padding: 15px; border-radius: 6px;">
+                                    <canvas id="${taiexCanvasId}"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+
+                    // Append the built card to our main app container
+                    appContainer.innerHTML += cardHtml;
+
+                    // 3. We must wait a millisecond for the browser to render the canvas tags into the DOM, 
+                    // then initialize the Chart.js objects using the arrays from Python
+                    setTimeout(() => {
+                        renderLineChart(
+                            tsmcCanvasId, 
+                            "TSMC (TPE:2330) 14-Day Post-Exercise Trend", 
+                            event.market_analytics.graphs.TSMC_14_Day_Trend, 
+                            "#58a6ff"
+                        );
+                        renderLineChart(
+                            taiexCanvasId, 
+                            "TAIEX Index 14-Day Post-Exercise Trend", 
+                            event.market_analytics.graphs.TAIEX_14_Day_Trend, 
+                            "#3fb950"
+                        );
+                    }, 50);
+                });
+            } else {
+                appContainer.innerHTML = '<div class="loading">Failed to load analytics payload.</div>';
             }
-
-            eventElement.innerHTML = `
-                <div class="timeline-header">
-                    <span class="badge-date">${event.date}</span>
-                    <h2>${event.exercise}</h2>
-                </div>
-                <p class="summary-text">${event.context}</p>
-                
-                <div class="market-box">
-                    <h3>📈 Financial Market Corelation</h3>
-                    <p>${event.market_impact.analysis}</p>
-                    <small>System Status Check: TSMC (TPE:2330): <strong>${event.market_impact.tracked_assets[0].trend}</strong></small>
-                </div>
-
-                <div class="tech-breakdown-section">
-                    <h3>🛠️ Deployed Tech Hardware Breakdown</h3>
-                    ${hardwareHTML}
-                </div>
-                <hr/>
-            `;
-            timelineContainer.appendChild(eventElement);
+        })
+        .catch(error => {
+            console.error("Error loading application:", error);
+            appContainer.innerHTML = '<div class="loading" style="color: #ff7b72;">Failed to dynamically render analytics. Check local server terminal configurations.</div>';
         });
+});
 
-    } catch (error) {
-        console.error("Error processing timeline pipeline:", error);
-        if(timelineContainer) {
-            timelineContainer.innerHTML = `<p class="error">Failed to dynamically render analytics. Check local server terminal configurations.</p>`;
+// Helper function that configures Chart.js options
+function renderLineChart(canvasId, label, trendData, themeColor) {
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    
+    // Split the data array into independent labels (X-axis) and prices (Y-axis)
+    const labels = trendData.map(item => item.day);
+    const dataPoints = trendData.map(item => item.price);
+
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: label,
+                data: dataPoints,
+                borderColor: themeColor,
+                backgroundColor: themeColor + '1A', // Adds slight transparency for line fill area
+                borderWidth: 2,
+                tension: 0.3, // Adds smooth curve smoothing to graph lines
+                pointRadius: 3,
+                pointBackgroundColor: themeColor
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { labels: { color: '#c9d1d9' } }
+            },
+            scales: {
+                x: { grid: { color: '#30363d' }, ticks: { color: '#8b949e' } },
+                y: { grid: { color: '#30363d' }, ticks: { color: '#8b949e' } }
+            }
         }
-    }
+    });
 }
-
-// Run layout on window startup
-document.addEventListener('DOMContentLoaded', renderInteractiveTimeline);
