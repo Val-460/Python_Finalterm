@@ -1,4 +1,4 @@
-// Target a structural container in your HTML index to draw out components dynamically
+// Targgit rebase --continueet a structural container in your HTML index to draw out components dynamically
 const timelineContainer = document.getElementById('timeline-app');
 
 async function renderInteractiveTimeline() {
