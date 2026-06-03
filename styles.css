@@ -139,112 +139,19 @@ footer {
     font-size: 0.8rem;
     border-top: 1px solid var(--border-color);
 }
-/* ==========================================================================
-   🖱️ 可點擊藍字的互動樣式
-   ========================================================================= */
-.tech-clickable {
-    color: var(--accent-blue);
-    cursor: pointer;
-    border-bottom: 1px dashed transparent;
-    transition: all 0.2s ease;
-    display: inline-block;
+
+/* Dynamic Chart Grid Layout */
+.chart-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 15px;
+    margin-top: 20px;
 }
 
-.tech-clickable:hover {
-    color: #79c0ff; /* 懸停時變亮藍色 */
-    border-bottom: 1px dashed #79c0ff;
-    background-color: rgba(88, 166, 255, 0.1);
-    border-radius: 3px;
-    padding: 0 2px;
-}
-
-/* ==========================================================================
-   🖥️ 自訂註解彈窗（Modal）樣式
-   ========================================================================= */
-#tech-custom-modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.6); /* 遮罩背景 */
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 9999; /* 確保在最上層 */
-    animation: fadeIn 0.2s ease-out;
-}
-
-.modal-content {
+.chart-wrapper {
     background-color: #1f242c;
-    border: 1px solid var(--border-color);
-    border-radius: 10px;
-    padding: 25px;
-    width: 90%;
-    max-width: 400px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-    animation: slideUp 0.2s ease-out;
-}
-
-.modal-content h3 {
-    margin: 0 0 10px 0;
-    font-size: 1.1rem;
-    color: var(--text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.modal-tech-name {
-    font-size: 1.3rem;
-    color: var(--accent-blue);
-    font-weight: bold;
-    margin: 5px 0;
-}
-
-.modal-divider {
-    height: 1px;
-    background-color: var(--border-color);
-    margin: 15px 0;
-}
-
-.modal-label {
-    font-size: 0.9rem;
-    color: var(--text-primary);
-    margin-bottom: 8px;
-}
-
-.modal-content ul {
-    margin: 0 0 20px 0;
-    padding-left: 20px;
-}
-
-.modal-content li {
-    color: #ffffff;
-    margin: 6px 0;
-    font-size: 1.05rem;
-}
-
-.modal-content button {
-    background-color: #21262d;
-    color: var(--text-primary);
-    border: 1px solid var(--border-color);
-    padding: 8px 16px;
+    padding: 15px;
     border-radius: 6px;
-    cursor: pointer;
-    width: 100%;
-    font-weight: 500;
-    transition: background 0.2s;
-}
-
-.modal-content button:hover {
-    background-color: #30363d;
-    border-color: #8b949e;
-}
-
-/* 動態特效 */
-@keyframes fadeIn {
-    from { opacity: 0; } to { opacity: 1; }
-}
-@keyframes slideUp {
-    from { transform: translateY(10px); } to { transform: translateY(0); }
+    border: 1px solid var(--border-color);
+    min-height: 250px;
 }
