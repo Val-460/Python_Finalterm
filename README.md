@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Simple Vercel Website
 
 A minimal static website built with HTML, CSS, and JavaScript. Deploy it directly to Vercel by connecting this repository.
@@ -9,6 +10,12 @@ A minimal static website built with HTML, CSS, and JavaScript. Deploy it directl
 - `script.js` – small scrolling behavior
 
 ## Deploy
+=======
+# Vercel Website
+
+A minimal static website built with HTML, CSS, and JavaScript. Deploy it directly to Vercel by connecting this repository.
+
+>>>>>>> e9afc60 (feat: add frontend layout and serverless python scraping backend)
 
 1. Push this folder to a Git repository.
 2. Create a new project on Vercel.
