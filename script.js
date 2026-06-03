@@ -1,8 +1,7 @@
 document.addEventListener("DOMContentLoaded", () => {
     const appContainer = document.getElementById("timeline-app");
 
-    // Display a loading indicator while fetching the serverless API
-    appContainer.innerHTML = '<div class="loading">Fetching military assets and market analytics...</div>';
+    appContainer.innerHTML = '<div class="loading">Fetching tactical assets and expanded market analytics...</div>';
 
     fetch('/api/Pycode')
         .then(response => {
@@ -10,16 +9,20 @@ document.addEventListener("DOMContentLoaded", () => {
             return response.json();
         })
         .then(data => {
-            // Clear the loading indicator
             appContainer.innerHTML = "";
 
             if (data.status === "success") {
-                data.timeline_data.forEach((event, index) => {
-                    // 1. Create a unique ID for the canvas graph elements
-                    const tsmcCanvasId = `chart-tsmc-${index}`;
-                    const taiexCanvasId = `chart-taiex-${index}`;
+                // Tactical color palette for specific industrial sectors
+                const themeColors = {
+                    "Semiconductors": "#58a6ff",                  // Blue
+                    "Drones": "#d29922",                          // Amber
+                    "Defense Weapons": "#f85149",                 // Red
+                    "Ballistic Materials (UHMWPE/Ceramic)": "#3fb950", // Green
+                    "Sensors & Electronics": "#a371f7"            // Purple
+                };
 
-                    // 2. Build out the HTML structure for each card
+                data.timeline_data.forEach((event, index) => {
+                    // 1. Build hardware specifications HTML
                     let hardwareHtml = "";
                     for (const [name, specs] of Object.entries(event.hardware_and_tech_breakdown)) {
                         hardwareHtml += `
@@ -32,6 +35,30 @@ document.addEventListener("DOMContentLoaded", () => {
                         `;
                     }
 
+                    // 2. Dynamically build canvas grids for all available sectors
+                    let chartsHtml = `<div class="chart-grid">`;
+                    let chartConfigs = [];
+                    
+                    let sectorIndex = 0;
+                    for (const [sectorName, trendData] of Object.entries(event.market_analytics.graphs)) {
+                        const canvasId = `chart-${index}-${sectorIndex}`;
+                        chartsHtml += `
+                            <div class="chart-wrapper">
+                                <canvas id="${canvasId}"></canvas>
+                            </div>
+                        `;
+                        
+                        chartConfigs.push({
+                            id: canvasId,
+                            label: `${sectorName} (14-Day Trend)`,
+                            data: trendData,
+                            color: themeColors[sectorName] || "#8b949e"
+                        });
+                        sectorIndex++;
+                    }
+                    chartsHtml += `</div>`;
+
+                    // 3. Assemble the full timeline card
                     const cardHtml = `
                         <div class="timeline-card">
                             <div class="timeline-header">
@@ -41,42 +68,25 @@ document.addEventListener("DOMContentLoaded", () => {
                             <p class="summary-text">${event.context}</p>
                             
                             <div class="tech-breakdown-section">
-                                <h3>Frontline Hardware & Semiconductor Vector Breakdown</h3>
+                                <h3>Frontline Hardware & Component Vector Breakdown</h3>
                                 ${hardwareHtml}
                             </div>
 
                             <div class="market-box">
-                                <h3>Market Volatility & Resilience Tracking</h3>
+                                <h3>Sector-Specific Volatility Tracking</h3>
                                 <p>${event.market_analytics.summary}</p>
-                                
-                                <div style="margin-top: 20px; background: #1f242c; padding: 15px; border-radius: 6px;">
-                                    <canvas id="${tsmcCanvasId}"></canvas>
-                                </div>
-                                <div style="margin-top: 20px; background: #1f242c; padding: 15px; border-radius: 6px;">
-                                    <canvas id="${taiexCanvasId}"></canvas>
-                                </div>
+                                ${chartsHtml}
                             </div>
                         </div>
                     `;
 
-                    // Append the built card to our main app container
                     appContainer.innerHTML += cardHtml;
 
-                    // 3. We must wait a millisecond for the browser to render the canvas tags into the DOM, 
-                    // then initialize the Chart.js objects using the arrays from Python
+                    // 4. Render Chart.js instances after DOM updates
                     setTimeout(() => {
-                        renderLineChart(
-                            tsmcCanvasId, 
-                            "TSMC (TPE:2330) 14-Day Post-Exercise Trend", 
-                            event.market_analytics.graphs.TSMC_14_Day_Trend, 
-                            "#58a6ff"
-                        );
-                        renderLineChart(
-                            taiexCanvasId, 
-                            "TAIEX Index 14-Day Post-Exercise Trend", 
-                            event.market_analytics.graphs.TAIEX_14_Day_Trend, 
-                            "#3fb950"
-                        );
+                        chartConfigs.forEach(config => {
+                            renderLineChart(config.id, config.label, config.data, config.color);
+                        });
                     }, 50);
                 });
             } else {
@@ -89,11 +99,9 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 });
 
-// Helper function that configures Chart.js options
 function renderLineChart(canvasId, label, trendData, themeColor) {
     const ctx = document.getElementById(canvasId).getContext('2d');
     
-    // Split the data array into independent labels (X-axis) and prices (Y-axis)
     const labels = trendData.map(item => item.day);
     const dataPoints = trendData.map(item => item.price);
 
@@ -105,9 +113,9 @@ function renderLineChart(canvasId, label, trendData, themeColor) {
                 label: label,
                 data: dataPoints,
                 borderColor: themeColor,
-                backgroundColor: themeColor + '1A', // Adds slight transparency for line fill area
+                backgroundColor: themeColor + '1A', // Slight transparency for the fill
                 borderWidth: 2,
-                tension: 0.3, // Adds smooth curve smoothing to graph lines
+                tension: 0.3,
                 pointRadius: 3,
                 pointBackgroundColor: themeColor
             }]
@@ -116,11 +124,11 @@ function renderLineChart(canvasId, label, trendData, themeColor) {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { labels: { color: '#c9d1d9' } }
+                legend: { labels: { color: '#c9d1d9', font: { size: 11 } } }
             },
             scales: {
-                x: { grid: { color: '#30363d' }, ticks: { color: '#8b949e' } },
-                y: { grid: { color: '#30363d' }, ticks: { color: '#8b949e' } }
+                x: { grid: { color: '#30363d' }, ticks: { color: '#8b949e', font: { size: 10 } } },
+                y: { grid: { color: '#30363d' }, ticks: { color: '#8b949e', font: { size: 10 } } }
             }
         }
     });
