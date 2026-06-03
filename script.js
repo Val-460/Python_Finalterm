@@ -7,7 +7,7 @@ async function renderInteractiveTimeline() {
             timelineContainer.innerHTML = `<p class="loading">Loading Timeline Data & Scraping Financial Frameworks...</p>`;
         }
 
-        // Call the serverless Python script
+        // Call the serverless Python script (保持 Vercel 相對路徑形式)
         const response = await fetch('/api/Pycode');
         const data = await response.json();
 
@@ -27,9 +27,9 @@ async function renderInteractiveTimeline() {
             // Loop through nested hardware tech components sent by Python
             for (const [hardwareName, techDetails] of Object.entries(event.hardware_and_tech_breakdown)) {
 
-                // 🛠️ 這裡微調：將原本的陣列，轉換成帶有 onclick 的網頁超連結標籤
+                // 🛠️ 將原本的晶片陣列，轉換成帶有 onclick 的藍字超連結標籤
                 const sensorsLinks = techDetails.chips_sensors.map(sensor => {
-                    return `<a href="javascript:void(0)" class="sensor-click-link" style="color: #3b82f6; text-decoration: underline; cursor: pointer;" onclick="showSensorDetails('${sensor}')">${sensor}</a>`;
+                    return `<a href="javascript:void(0)" class="sensor-click-link" style="color: #3b82f6; text-decoration: underline; cursor: pointer; font-weight: bold;" onclick="showSensorDetails('${sensor}')">${sensor}</a>`;
                 }).join(', ');
 
                 hardwareHTML += `
@@ -42,6 +42,7 @@ async function renderInteractiveTimeline() {
                 `;
             }
 
+            // 完全保留你原本擁有圖表結構的 HTML 模板
             eventElement.innerHTML = `
                 <div class="timeline-header">
                     <span class="badge-date">${event.date}</span>
@@ -101,7 +102,7 @@ function showSensorDetails(sensorName) {
         document.body.appendChild(modal);
     }
 
-    // 2. 依據點擊的感測器名稱，給予相對應的規格介紹說明（你可以根據需求自行調整說明文字）
+    // 2. 依據點擊的感測器名稱，給予相對應的規格介紹說明
     let description = "這是該載具配備的核心電子/感測系統。";
 
     if (sensorName.includes("Type 1493 AESA Radar")) {
