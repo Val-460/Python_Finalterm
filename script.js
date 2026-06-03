@@ -38,7 +38,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     // 2. Dynamically build canvas grids for all available sectors
                     let chartsHtml = `<div class="chart-grid">`;
                     let chartConfigs = [];
-                    
+
                     let sectorIndex = 0;
                     for (const [sectorName, trendData] of Object.entries(event.market_analytics.graphs)) {
                         const canvasId = `chart-${index}-${sectorIndex}`;
@@ -47,7 +47,7 @@ document.addEventListener("DOMContentLoaded", () => {
                                 <canvas id="${canvasId}"></canvas>
                             </div>
                         `;
-                        
+
                         chartConfigs.push({
                             id: canvasId,
                             label: `${sectorName} (14-Day Trend)`,
@@ -66,7 +66,7 @@ document.addEventListener("DOMContentLoaded", () => {
                                 <span class="badge-date">${event.date}</span>
                             </div>
                             <p class="summary-text">${event.context}</p>
-                            
+
                             <div class="tech-breakdown-section">
                                 <h3>Frontline Hardware & Component Vector Breakdown</h3>
                                 ${hardwareHtml}
@@ -101,7 +101,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 function renderLineChart(canvasId, label, trendData, themeColor) {
     const ctx = document.getElementById(canvasId).getContext('2d');
-    
+
     const labels = trendData.map(item => item.day);
     const dataPoints = trendData.map(item => item.price);
 
