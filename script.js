@@ -7,7 +7,7 @@ async function renderInteractiveTimeline() {
             timelineContainer.innerHTML = `<p class="loading">Loading Timeline Data & Scraping Financial Frameworks...</p>`;
         }
 
-        // Call the serverless Python script (保持 Vercel 相對路徑)
+        // Call the serverless Python script (符合 Vercel 形式)
         const response = await fetch('/api/Pycode');
         const data = await response.json();
 
@@ -21,44 +21,43 @@ async function renderInteractiveTimeline() {
             const eventElement = document.createElement('div');
             eventElement.className = 'timeline-card';
 
-            // 1. 完全還原你原本的 hardwareHTML 變數，只微調晶片點擊事件
+            // 1. 還原你原本的 Frontline Hardware 結構，並加上藍字點擊
             let hardwareHTML = '';
-
-            // Loop through nested hardware tech components sent by Python
             for (const [hardwareName, techDetails] of Object.entries(event.hardware_and_tech_breakdown)) {
 
-                // 💡 精準替換：把原本的純文字變成可以點擊的超連結，完全不破壞外層結構
+                // 💡 精準微調：把原本的純文字轉換成可以點擊的超連結，帶入 Modal 功能
                 const sensorsLinks = techDetails.chips_sensors.map(sensor => {
                     return `<a href="javascript:void(0)" class="sensor-click-link" style="color: #3b82f6; text-decoration: underline; cursor: pointer; font-weight: bold;" onclick="showSensorDetails('${sensor}')">${sensor}</a>`;
                 }).join(', ');
 
+                // 這裡完全採用你截圖中顯示的 class 與排版樣式
                 hardwareHTML += `
                     <div class="hardware-spec">
-                        <h4>✈️ Hull/Platform: ${hardwareName} (${techDetails.category})</h4>
+                        <h4>${hardwareName} (${techDetails.category})</h4>
+                        <p><strong>Deep-Tech Components:</strong> ${techDetails.components.join(', ')}</p>
+                        <p><strong>Avionics & Sensors:</strong> <span class="highlight-tech">${sensorsLinks}</span></p>
                         <p><strong>Advanced Materials:</strong> ${techDetails.materials.join(', ')}</p>
-                        <p><strong>Sub-systems & Components:</strong> ${techDetails.components.join(', ')}</p>
-                        <p><strong>Chips, Radars & Sensors:</strong> <span class="highlight-tech">${sensorsLinks}</span></p>
                     </div>
                 `;
             }
 
-            // 2. 這裡一字不差，完全複製你提供「原本有圖表」的那個 HTML 模板
+            // 2. 核心大還原：這段完全複製你原本擁有四張趨勢圖的完美 HTML 模板結構
             eventElement.innerHTML = `
                 <div class="timeline-header">
-                    <span class="badge-date">${event.date}</span>
                     <h2>${event.exercise}</h2>
+                    <span class="badge-date">${event.date}</span>
                 </div>
                 <p class="summary-text">${event.context}</p>
 
-                <div class="market-box">
-                    <h3>📈 Financial Market Corelation</h3>
-                    <p>${event.market_impact.analysis}</p>
-                    <small>System Status Check: TSMC (TPE:2330): <strong>${event.market_impact.tracked_assets[0].trend}</strong></small>
+                <h3 style="color: #ff7a00; margin-top: 25px; font-size: 1.15rem;">Frontline Hardware & Component Vector Breakdown</h3>
+                <div class="tech-breakdown-section">
+                    ${hardwareHTML}
                 </div>
 
-                <div class="tech-breakdown-section">
-                    <h3>🛠️ Deployed Tech Hardware Breakdown</h3>
-                    ${hardwareHTML}
+                <div class="market-box" style="margin-top: 25px;">
+                    <h3 style="color: #10b981;">Sector-Specific Volatility Tracking</h3>
+                    <p>${event.market_impact.analysis}</p>
+                    <small style="display:block; margin-top:10px;">System Status Check: TSMC (TPE:2330): <strong>${event.market_impact.tracked_assets[0].trend}</strong></small>
                 </div>
                 <hr/>
             `;
@@ -104,7 +103,7 @@ function showSensorDetails(sensorName) {
     } else if (sensorName.includes("IRST")) {
         description = "紅外線搜索追蹤系統（Infrared Search and Track）。這是一種被動感測器，允許戰機在「不開啟雷達（無線電靜默）」的情況下，透過捕捉敵機散發的熱源來進行悄悄追蹤，極具戰術隱蔽價值。";
     } else if (sensorName.includes("Type 1475 AESA Radar")) {
-        description = "Type 1475 是專為殲-20（J-20）隱形戰機研發的高端雷達，具備低可偵測性技術（LPI），使其在搜索敵機時不易被對方的雷達告警接收器察覺。";
+        description = "Type 1475（即機載三座標主動相控陣雷達）是專為殲-20（J-20）隱形戰機研發的高端雷達，具備低可偵測性技術（LPI），使其在搜索敵機時不易被對方的雷達告警接收器察覺。";
     } else if (sensorName.includes("EOTS")) {
         description = "光電分散式孔徑系統 / 光電瞄準系統。整合了紅外線前視與全週向光電偵測功能，提供飛行員 360 度無死角的戰場動態視野，並具備超強的隱形跟蹤與對地高精度打擊瞄準能力。";
     } else if (sensorName.includes("Type 346A")) {
