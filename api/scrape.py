@@ -2,30 +2,25 @@ import json
 import asyncio
 import tempfile
 import base64
-import io
 from pathlib import Path
+
+from flask import Flask, request, jsonify
 
 from src.config import ScrapeConfig
 from src.scraper import fetch_all_data
 from src.analyzer import analyze_and_plot
 
-
-def read_request_json(request):
-    if hasattr(request, 'json'):
-        return request.json()
-    if hasattr(request, 'get_json'):
-        return request.get_json()
-    try:
-        body = request.body
-        if isinstance(body, bytes):
-            body = body.decode('utf-8')
-        return json.loads(body or '{}')
-    except Exception:
-        return {}
+app = Flask(__name__)
 
 
-def handler(request):
-    payload = read_request_json(request) or {}
+@app.route('/', methods=['POST', 'OPTIONS'])
+@app.route('/api/scrape', methods=['POST', 'OPTIONS'])
+@app.route('/api/scrape/', methods=['POST', 'OPTIONS'])
+def scrape():
+    if request.method == 'OPTIONS':
+        return '', 204
+
+    payload = request.get_json(silent=True) or {}
     keywords = payload.get('keywords', '')
     max_pages = int(payload.get('max_pages', 5) or 5)
 
@@ -79,32 +74,15 @@ def handler(request):
             except Exception as exc:
                 logs.append(f'[Error] 讀取 PNG 失敗：{exc}')
 
-            return {
-                'statusCode': 200,
-                'headers': {
-                    'Content-Type': 'application/json'
-                },
-                'body': json.dumps({
-                    'rows': len(df),
-                    'csv': csv_text,
-                    'csv_filename': 'listings.csv',
-                    'html': html_text,
-                    'html_filename': 'report.html',
-                    'png': png_b64,
-                    'logs': logs,
-                })
-            }
+            return jsonify({
+                'rows': len(df),
+                'csv': csv_text,
+                'csv_filename': 'listings.csv',
+                'html': html_text,
+                'html_filename': 'report.html',
+                'png': png_b64,
+                'logs': logs,
+            })
 
     except Exception as exc:
-        return {
-            'statusCode': 500,
-            'headers': {
-                'Content-Type': 'application/json'
-            },
-            'body': json.dumps({'error': str(exc), 'logs': logs})
-        }
-
-
-# Vercel Python runtime expects a top-level app/application/handler entrypoint.
-app = handler
-application = handler
+        return jsonify({'error': str(exc), 'logs': logs}), 500
