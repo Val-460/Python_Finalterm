@@ -1,0 +1,20 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pytest_cache/
+.pytest_cache/
+# Virtual environment
+.venv/
+# Logs
+*.log
+run_log.txt
+run_new_log.txt
+# Generated reports
+report.html
+# Debug artifacts
+debug/*.json
+# OS files
+.DS_Store
+Thumbs.db

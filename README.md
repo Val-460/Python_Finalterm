@@ -1,22 +1,52 @@
-<<<<<<< HEAD
-# Simple Vercel Website
+# 2Motor 二手機車抓取與分析專案
 
-A minimal static website built with HTML, CSS, and JavaScript. Deploy it directly to Vercel by connecting this repository.
+## 專案概覽
+本專案為 `2Motor` 二手機車網站資料抓取與分析工具，採用 Playwright 爬蟲 + Pandas 分析 + Tkinter GUI。這是一個已模組化、可測試、可生成報表的專案。
 
-## Files
+## 目錄結構
 
-- `index.html` – main website page
-- `styles.css` – basic responsive styling
-- `script.js` – small scrolling behavior
+- `src/`
+  - `config.py` - 應用程式設定、輸出路徑與常數管理
+  - `utils.py` - 資料清理與數值轉換輔助函式
+  - `scraper.py` - Playwright 網頁爬蟲與資料擷取邏輯
+  - `analyzer.py` - Pandas 清理、去重、Excel/HTML 報表與圖表輸出
+  - `pipeline.py` - 背景執行管線整合與日誌通知
+  - `gui.py` - Tkinter 使用者介面與程式啟動入口
+- `tests/` - 單元測試
+- `outputs/` - 產生的結果檔案：CSV、圖表 PNG、HTML、Excel
+- `archive/` - 保留的舊版/備份程式碼
+- `debug/` - 供程式執行時寫入的偵錯輸出（目前為空）
+- `run_2wheel.py` - 專案啟動腳本
+- `.gitignore` - 忽略項目設定
 
-## Deploy
-=======
-# Vercel Website
+## 清理後狀態
 
-A minimal static website built with HTML, CSS, and JavaScript. Deploy it directly to Vercel by connecting this repository.
+- 已移除舊執行日誌與過期產物：`run_log.txt`、`run_new_log.txt`、`report.html`
+- 已移除非正式測試與偵錯輔助檔案：`test_gui_minimal.py`
+- 已移除舊版偵錯輔助腳本目錄 `scripts/`
+- 已移除過期 debug JSON 檔案
+- 已刪除 Python bytecode 快取資料夾 `__pycache__/`
 
->>>>>>> e9afc60 (feat: add frontend layout and serverless python scraping backend)
+## 執行方式
 
-1. Push this folder to a Git repository.
-2. Create a new project on Vercel.
-3. Select this repository and deploy. No build step required.
+1. 啟動虛擬環境（若有）：
+   ```powershell
+   .\.venv\Scripts\Activate.ps1
+   ```
+2. 執行專案：
+   ```powershell
+   .\.venv\Scripts\python.exe run_2wheel.py
+   ```
+
+## 測試
+
+執行全部單元測試：
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests
+```
+
+## 注意事項
+
+- 若要重新啟用偵錯輸出，`src/scraper.py` 會自動寫入 `debug/html_pages/` 和 `debug/link_logs/`。
+- `outputs/` 保留為本專案正常執行的結果檔案資料夾。

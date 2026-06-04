@@ -1,0 +1,184 @@
+
+            <html lang='zh-Hant'>
+            <head>
+                <meta charset='utf-8'>
+                <title>2Motor 二手機車試算表報表</title>
+                
+            <style>
+                body { font-family: 'Microsoft JhengHei', Arial, sans-serif; background: #f7f7f7; color: #333; }
+                h1, h2 { margin: 0.3em 0; }
+                .container { width: 100%; max-width: 1280px; margin: 20px auto; padding: 20px; background: #fff; box-shadow: 0 0 20px rgba(0,0,0,0.06); }
+                table.spreadsheet-table { border-collapse: collapse; width: 100%; font-size: 13px; }
+                table.spreadsheet-table th, table.spreadsheet-table td { border: 1px solid #d6d6d6; padding: 8px 10px; }
+                table.spreadsheet-table th { background: #f0f4f8; color: #111; }
+                table.spreadsheet-table tr:nth-child(even) { background: #fcfcfc; }
+                .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 18px; }
+                .summary-card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px 14px; }
+                .summary-card strong { display: block; font-size: 16px; margin-bottom: 6px; }
+            </style>
+        
+            </head>
+            <body>
+                <div class='container'>
+                    <h1>2Motor 二手機車試算表報表</h1>
+                    <p>總筆數：1</p>
+                    <div class='summary'>
+                        <div class='summary-card'><strong>資料筆數</strong>1</div>
+                        <div class='summary-card'><strong>價格最小</strong>100000</div>
+                        <div class='summary-card'><strong>價格最大</strong>100000</div>
+                        <div class='summary-card'><strong>平均價格</strong>100000</div>
+                    </div>
+                    <table border="1" class="dataframe summary-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>title</th>
+      <th>price</th>
+      <th>url</th>
+      <th>mileage</th>
+      <th>year</th>
+      <th>cc</th>
+      <th>store</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>count</th>
+      <td>1</td>
+      <td>1.0</td>
+      <td>1</td>
+      <td>1.0</td>
+      <td>1.0</td>
+      <td>1.0</td>
+      <td>1</td>
+    </tr>
+    <tr>
+      <th>unique</th>
+      <td>1</td>
+      <td>NaN</td>
+      <td>1</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>1</td>
+    </tr>
+    <tr>
+      <th>top</th>
+      <td>車款A</td>
+      <td>NaN</td>
+      <td>https://example.com/1</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>店家A</td>
+    </tr>
+    <tr>
+      <th>freq</th>
+      <td>1</td>
+      <td>NaN</td>
+      <td>1</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>1</td>
+    </tr>
+    <tr>
+      <th>mean</th>
+      <td>NaN</td>
+      <td>100000.0</td>
+      <td>NaN</td>
+      <td>10000.0</td>
+      <td>2019.0</td>
+      <td>125.0</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>std</th>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>min</th>
+      <td>NaN</td>
+      <td>100000.0</td>
+      <td>NaN</td>
+      <td>10000.0</td>
+      <td>2019.0</td>
+      <td>125.0</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>25%</th>
+      <td>NaN</td>
+      <td>100000.0</td>
+      <td>NaN</td>
+      <td>10000.0</td>
+      <td>2019.0</td>
+      <td>125.0</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>50%</th>
+      <td>NaN</td>
+      <td>100000.0</td>
+      <td>NaN</td>
+      <td>10000.0</td>
+      <td>2019.0</td>
+      <td>125.0</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>75%</th>
+      <td>NaN</td>
+      <td>100000.0</td>
+      <td>NaN</td>
+      <td>10000.0</td>
+      <td>2019.0</td>
+      <td>125.0</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>max</th>
+      <td>NaN</td>
+      <td>100000.0</td>
+      <td>NaN</td>
+      <td>10000.0</td>
+      <td>2019.0</td>
+      <td>125.0</td>
+      <td>NaN</td>
+    </tr>
+  </tbody>
+</table>
+                    <table border="1" class="dataframe spreadsheet-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>title</th>
+      <th>price</th>
+      <th>url</th>
+      <th>mileage</th>
+      <th>year</th>
+      <th>cc</th>
+      <th>store</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>車款A</td>
+      <td>100000</td>
+      <td>https://example.com/1</td>
+      <td>10000</td>
+      <td>2019</td>
+      <td>125</td>
+      <td>店家A</td>
+    </tr>
+  </tbody>
+</table>
+                </div>
+            </body>
+            </html>
+        
