@@ -67,7 +67,11 @@ npm install
 npm run dev
 ```
 
+本地測試後請開啟 `http://localhost:3000`。
+
 部署到 Vercel：
 1. 將整個專案資料夾連至 Vercel。
 2. Vercel 自動偵測 `package.json` 與 `vercel.json`。
 3. 上傳並部署。
+
+如果您希望保留原本 Python CLI/GUI 程式，原始檔案仍在 `src/` 和 `archive/` 資料夾中。網站頁面會顯示如何使用這個程式並透過 serverless API 執行它。
