@@ -30,6 +30,37 @@ def build_target_url(config: ScrapeConfig, page_num: int) -> str:
     return f"{BASE_URL}?{query_string}" if query_string else BASE_URL
 
 
+def parse_title_meta(title: str) -> dict:
+    if not title or not isinstance(title, str):
+        return {"store": None, "year": None, "brand": None, "model": None, "item_id": None}
+
+    meta = {"store": None, "year": None, "brand": None, "model": None, "item_id": None}
+    text = title.strip()
+
+    store_match = re.match(r"^【([^】]+)】\s*", text)
+    if store_match:
+        meta["store"] = store_match.group(1).strip()
+        text = text[store_match.end():].strip()
+
+    id_match = re.search(r"#\s*(\d+)\s*$", text)
+    if id_match:
+        meta["item_id"] = id_match.group(1)
+        text = text[:id_match.start()].strip()
+
+    year_match = re.match(r"^(19\d{2}|20\d{2})\s+", text)
+    if year_match:
+        meta["year"] = int(year_match.group(1))
+        text = text[year_match.end():].strip()
+
+    parts = [part for part in text.split() if part]
+    if len(parts) >= 2:
+        meta["brand"] = parts[0]
+        meta["model"] = " ".join(parts[1:])
+    else:
+        meta["model"] = text or None
+    return meta
+
+
 async def fetch_all_data(config: ScrapeConfig, log_callback: Callable[[str], None] = print) -> List[dict]:
     if not callable(log_callback):
         log_callback = print
@@ -109,15 +140,19 @@ async def fetch_all_data(config: ScrapeConfig, log_callback: Callable[[str], Non
                         or "車款" in href_lower):
                     title = text or href
                     url = urllib.parse.urljoin(SITE_ROOT, href)
+                    meta = parse_title_meta(title)
                     fallback_items.append({
                         "title": title,
                         "price_text": None,
                         "price": None,
                         "url": url,
                         "mileage": None,
-                        "year": None,
+                        "year": meta["year"],
                         "cc": None,
-                        "store": None,
+                        "store": meta["store"],
+                        "brand": meta["brand"],
+                        "model": meta["model"],
+                        "item_id": meta["item_id"],
                         "raw_text": f"fallback link: {title}",
                     })
 
@@ -181,6 +216,12 @@ async def fetch_all_data(config: ScrapeConfig, log_callback: Callable[[str], Non
                     if store_match:
                         store = store_match.group(1)
 
+                meta = parse_title_meta(title or raw_text)
+                if not store and meta["store"]:
+                    store = meta["store"]
+                if year is None and meta["year"] is not None:
+                    year = meta["year"]
+
                 item = {
                     'title': title or "未知",
                     'price_text': price_text,
@@ -190,6 +231,9 @@ async def fetch_all_data(config: ScrapeConfig, log_callback: Callable[[str], Non
                     'year': year,
                     'cc': cc,
                     'store': store,
+                    'brand': meta["brand"],
+                    'model': meta["model"],
+                    'item_id': meta["item_id"],
                     'raw_text': raw_text,
                 }
 

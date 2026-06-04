@@ -23,7 +23,7 @@ def analyze_and_plot(data_list: list[dict], outputs: Dict[str, str], log_callbac
 
     if df.empty:
         log_callback("[Warning] 沒抓取到任何有效的二手機車數據。")
-        empty_df = pd.DataFrame(columns=["title", "price", "url", "mileage", "year", "cc", "store"])
+        empty_df = pd.DataFrame(columns=["title", "brand", "model", "item_id", "price", "url", "mileage", "year", "cc", "store", "raw_text"])
         try:
             empty_df.to_csv(outputs.get("csv", "output_listings.csv"), index=False, encoding="utf-8-sig")
             log_callback(f"[Data] 已儲存空 CSV：{outputs.get('csv', 'output_listings.csv')}")
@@ -31,7 +31,7 @@ def analyze_and_plot(data_list: list[dict], outputs: Dict[str, str], log_callbac
             log_callback(f"[Error] 儲存空 CSV 失敗：{e}")
         return empty_df
 
-    for col in ["title", "price", "url", "mileage", "year", "cc", "store"]:
+    for col in ["title", "brand", "model", "item_id", "price", "url", "mileage", "year", "cc", "store", "raw_text"]:
         if col not in df.columns:
             df[col] = None
 

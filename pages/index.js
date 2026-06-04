@@ -68,6 +68,9 @@ export default function Home() {
         } else {
           const parsed = parseCSV(data.csv)
           const titleIndex = parsed.headers.indexOf('title')
+          const modelIndex = parsed.headers.indexOf('model')
+          const brandIndex = parsed.headers.indexOf('brand')
+          const itemIdIndex = parsed.headers.indexOf('item_id')
           const priceIndex = parsed.headers.indexOf('price')
           const mileageIndex = parsed.headers.indexOf('mileage')
           const yearIndex = parsed.headers.indexOf('year')
@@ -78,14 +81,15 @@ export default function Home() {
           const rows = parsed.rows.map(row => {
             const title = titleIndex >= 0 ? row[titleIndex] : ''
             const meta = parseTitleMeta(title)
+            const modelValue = modelIndex >= 0 && row[modelIndex] ? row[modelIndex] : meta.model
             return {
               row,
               title,
               store: storeIndex >= 0 && row[storeIndex] ? row[storeIndex] : meta.store,
               year: yearIndex >= 0 && row[yearIndex] ? row[yearIndex] : meta.year,
-              brand: meta.brand,
-              model: meta.model,
-              itemId: meta.itemId,
+              brand: brandIndex >= 0 && row[brandIndex] ? row[brandIndex] : meta.brand,
+              model: modelValue,
+              itemId: itemIdIndex >= 0 && row[itemIdIndex] ? row[itemIdIndex] : meta.itemId,
               price: priceIndex >= 0 ? parseInt(row[priceIndex]) || null : null,
               mileage: mileageIndex >= 0 ? parseInt(row[mileageIndex]) || null : null,
               cc: ccIndex >= 0 ? parseInt(row[ccIndex]) || null : null,
@@ -93,7 +97,7 @@ export default function Home() {
             }
           })
 
-          const uniqueModels = [...new Set(rows.map(item => item.model || item.title).filter(Boolean))]
+          const uniqueModels = [...new Set(rows.map(item => item.model).filter(Boolean))]
             .sort()
             .slice(0, 100)
 
