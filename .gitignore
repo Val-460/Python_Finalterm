@@ -15,6 +15,11 @@ run_new_log.txt
 report.html
 # Debug artifacts
 debug/*.json
+# Node/Vercel build artifacts
+node_modules/
+.next/
+npm-debug.log*
+
 # OS files
 .DS_Store
 Thumbs.db
