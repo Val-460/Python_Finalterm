@@ -16,8 +16,17 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ keywords, max_pages: Number(maxPages) })
       })
-      const data = await resp.json()
-      setResult(data)
+      const text = await resp.text()
+      try {
+        const data = JSON.parse(text)
+        if (!resp.ok) {
+          setResult({ error: `API 錯誤 (${resp.status}): ${data.error || text}`, logs: data.logs })
+        } else {
+          setResult(data)
+        }
+      } catch (jsonError) {
+        setResult({ error: `無效 JSON 回應 (${resp.status}): ${text}` })
+      }
     } catch (error) {
       setResult({ error: String(error) })
     } finally {
