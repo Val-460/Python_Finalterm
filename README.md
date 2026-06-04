@@ -50,3 +50,24 @@
 
 - 若要重新啟用偵錯輸出，`src/scraper.py` 會自動寫入 `debug/html_pages/` 和 `debug/link_logs/`。
 - `outputs/` 保留為本專案正常執行的結果檔案資料夾。
+
+## Vercel 無伺服器部署
+
+此專案已新增根目錄 Next.js 前端以及 Python API，可直接部署到 Vercel，無需外部伺服器主機。
+- `package.json` 和 `pages/index.js` 用於網站前端。
+- `api/scrape.py` 是 Vercel Python serverless 函式，會呼叫 `src/scraper.py` 和 `src/analyzer.py`。
+- `requirements.txt` 列出 Python 相依套件。
+- `vercel.json` 定義 Vercel 建構器：Next.js 前端與 Python API。
+
+本地測試：
+
+```powershell
+python -m pip install -r requirements.txt
+npm install
+npm run dev
+```
+
+部署到 Vercel：
+1. 將整個專案資料夾連至 Vercel。
+2. Vercel 自動偵測 `package.json` 與 `vercel.json`。
+3. 上傳並部署。

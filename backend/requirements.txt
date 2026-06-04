@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+pydantic
+pandas
+matplotlib
+openpyxl
+playwright
+playwright-stealth
