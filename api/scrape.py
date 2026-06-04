@@ -74,6 +74,14 @@ def scrape():
             except Exception as exc:
                 logs.append(f'[Error] 讀取 PNG 失敗：{exc}')
 
+            excel_b64 = None
+            try:
+                excel_path = outputs['excel']
+                if Path(excel_path).exists():
+                    excel_b64 = base64.b64encode(Path(excel_path).read_bytes()).decode('ascii')
+            except Exception as exc:
+                logs.append(f'[Error] 讀取 Excel 失敗：{exc}')
+
             return jsonify({
                 'rows': len(df),
                 'csv': csv_text,
@@ -81,6 +89,8 @@ def scrape():
                 'html': html_text,
                 'html_filename': 'report.html',
                 'png': png_b64,
+                'excel': excel_b64,
+                'excel_filename': 'report.xlsx',
                 'logs': logs,
             })
 

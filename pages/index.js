@@ -114,26 +114,31 @@ export default function Home() {
               <h3>試算表預覽</h3>
               <div style={{ marginBottom: 12, display: 'flex', gap: 10 }}>
                 <button onClick={() => download(result.csv_filename || 'listings.csv', result.csv, 'text/csv')} style={{ padding: '8px 12px', background: '#111', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>下載 CSV</button>
+                {result.excel && (
+                  <button onClick={() => { const link = document.createElement('a'); link.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' + result.excel; link.download = result.excel_filename || 'report.xlsx'; link.click(); }} style={{ padding: '8px 12px', background: '#1f7f20', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>下載 Excel</button>
+                )}
               </div>
               {(() => {
                 const parsed = parseCSV(result.csv)
                 return (
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <div style={{ overflowX: 'auto', border: '1px solid #ccc', borderRadius: 6, boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, backgroundColor: '#fff' }}>
                       <thead>
-                        <tr style={{ background: '#f0f0f0' }}>
-                          {parsed.headers.map((h, i) => <th key={i} style={{ border: '1px solid #ddd', padding: 8, textAlign: 'left' }}>{h}</th>)}
+                        <tr style={{ background: '#4472C4', color: '#fff' }}>
+                          <th style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'center', fontWeight: 'bold', width: 40, minWidth: 40 }}>#</th>
+                          {parsed.headers.map((h, i) => <th key={i} style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'left', fontWeight: 'bold' }}>{h}</th>)}
                         </tr>
                       </thead>
                       <tbody>
-                        {parsed.rows.slice(0, 20).map((row, i) => (
-                          <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f9f9f9' }}>
-                            {row.map((cell, j) => <td key={j} style={{ border: '1px solid #ddd', padding: 8, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cell}</td>)}
+                        {parsed.rows.slice(0, 50).map((row, i) => (
+                          <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f0f2f5', borderBottom: '1px solid #e0e0e0' }}>
+                            <td style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'center', fontSize: 12, color: '#666', background: i % 2 === 0 ? '#f5f5f5' : '#efefef', fontWeight: 500 }}>{i + 1}</td>
+                            {row.map((cell, j) => <td key={j} style={{ border: '1px solid #d0d0d0', padding: 10, maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cell}</td>)}
                           </tr>
                         ))}
                       </tbody>
                     </table>
-                    {parsed.rows.length > 20 && <div style={{ marginTop: 8, color: '#666' }}>...還有 {parsed.rows.length - 20} 筆資料，請下載 CSV 查看完整內容</div>}
+                    {parsed.rows.length > 50 && <div style={{ padding: 12, background: '#f9f9f9', borderTop: '1px solid #ccc', textAlign: 'center', color: '#666', fontSize: 12 }}>...還有 {parsed.rows.length - 50} 筆資料，請下載 Excel 或 CSV 查看完整內容</div>}
                   </div>
                 )
               })()}
