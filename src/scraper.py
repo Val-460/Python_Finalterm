@@ -2,6 +2,7 @@
 import asyncio
 import random
 import re
+import tempfile
 import traceback
 import urllib.parse
 from pathlib import Path
@@ -41,10 +42,15 @@ async def fetch_all_data(config: ScrapeConfig, log_callback: Callable[[str], Non
         return []
 
     results: List[dict] = []
-    debug_html_dir = Path("debug/html_pages")
-    debug_link_dir = Path("debug/link_logs")
-    debug_html_dir.mkdir(parents=True, exist_ok=True)
-    debug_link_dir.mkdir(parents=True, exist_ok=True)
+    temp_dir = Path(tempfile.gettempdir()) / "2motor_debug"
+    debug_html_dir = temp_dir / "html_pages"
+    debug_link_dir = temp_dir / "link_logs"
+    try:
+        debug_html_dir.mkdir(parents=True, exist_ok=True)
+        debug_link_dir.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        debug_html_dir = None
+        debug_link_dir = None
 
     session = requests.Session()
     if USER_AGENTS:
@@ -63,12 +69,15 @@ async def fetch_all_data(config: ScrapeConfig, log_callback: Callable[[str], Non
             log_callback(f"[Page {page_num}] 請求失敗：{e}")
             break
 
-        try:
-            debug_file = debug_html_dir / f"page_{page_num}.html"
-            debug_file.write_text(html_content, encoding="utf-8")
-            log_callback(f"[Page {page_num}] 已儲存觀察 HTML：{debug_file}")
-        except Exception as e:
-            log_callback(f"[Page {page_num}] 儲存觀察 HTML 失敗：{e}")
+        if debug_html_dir is not None:
+            try:
+                debug_file = debug_html_dir / f"page_{page_num}.html"
+                debug_file.write_text(html_content, encoding="utf-8")
+                log_callback(f"[Page {page_num}] 已儲存觀察 HTML：{debug_file}")
+            except Exception as e:
+                log_callback(f"[Page {page_num}] 儲存觀察 HTML 失敗：{e}")
+        else:
+            log_callback(f"[Page {page_num}] 跳過儲存觀察 HTML（debug 目錄不可用）")
 
         try:
             soup = BeautifulSoup(html_content, "html.parser")
@@ -112,12 +121,15 @@ async def fetch_all_data(config: ScrapeConfig, log_callback: Callable[[str], Non
                         "raw_text": f"fallback link: {title}",
                     })
 
-            try:
-                link_debug_file = debug_link_dir / f"links_{page_num}.txt"
-                link_debug_file.write_text("\n".join(all_href_entries), encoding="utf-8")
-                log_callback(f"[Page {page_num}] 已儲存所有連結供觀察：{link_debug_file}")
-            except Exception as e:
-                log_callback(f"[Page {page_num}] 儲存連結觀察檔案失敗：{e}")
+            if debug_link_dir is not None:
+                try:
+                    link_debug_file = debug_link_dir / f"links_{page_num}.txt"
+                    link_debug_file.write_text("\n".join(all_href_entries), encoding="utf-8")
+                    log_callback(f"[Page {page_num}] 已儲存所有連結供觀察：{link_debug_file}")
+                except Exception as e:
+                    log_callback(f"[Page {page_num}] 儲存連結觀察檔案失敗：{e}")
+            else:
+                log_callback(f"[Page {page_num}] 跳過儲存連結觀察檔案（debug 目錄不可用）")
 
             if fallback_items:
                 log_callback(f"[Page {page_num}] 備援連結掃描找到 {len(fallback_items)} 個可能商品項目。")
