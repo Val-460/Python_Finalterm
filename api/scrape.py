@@ -103,3 +103,8 @@ def handler(request):
             },
             'body': json.dumps({'error': str(exc), 'logs': logs})
         }
+
+
+# Vercel Python runtime expects a top-level app/application/handler entrypoint.
+app = handler
+application = handler
