@@ -7,6 +7,42 @@ export default function Home() {
   const [result, setResult] = useState(null)
   const [selectedModel, setSelectedModel] = useState('')
   const [models, setModels] = useState([])
+  const [parsedRows, setParsedRows] = useState([])
+  const [parsedHeaders, setParsedHeaders] = useState([])
+
+  function parseTitleMeta(title) {
+    const meta = { store: '', year: '', brand: '', model: '', itemId: '' }
+    if (!title || typeof title !== 'string') return meta
+    let text = title.trim()
+
+    const storeMatch = text.match(/^【([^】]+)】\s*/)
+    if (storeMatch) {
+      meta.store = storeMatch[1].trim()
+      text = text.slice(storeMatch[0].length).trim()
+    }
+
+    const idMatch = text.match(/#\s*(\d+)\s*$/)
+    if (idMatch) {
+      meta.itemId = idMatch[1]
+      text = text.slice(0, idMatch.index).trim()
+    }
+
+    const yearMatch = text.match(/^(\d{4})\s+/)
+    if (yearMatch) {
+      meta.year = yearMatch[1]
+      text = text.slice(yearMatch[0].length).trim()
+    }
+
+    const parts = text.split(/\s+/).filter(Boolean)
+    if (parts.length > 1) {
+      meta.brand = parts[0]
+      meta.model = parts.slice(1).join(' ')
+    } else {
+      meta.model = text
+    }
+
+    return meta
+  }
 
   async function submit(event) {
     event.preventDefault()
@@ -14,6 +50,8 @@ export default function Home() {
     setResult(null)
     setSelectedModel('')
     setModels([])
+    setParsedRows([])
+    setParsedHeaders([])
 
     try {
       const resp = await fetch('/api/scrape', {
@@ -28,15 +66,40 @@ export default function Home() {
         if (!resp.ok) {
           setResult({ error: `API 錯誤 (${resp.status}): ${data.error || text}`, logs: data.logs })
         } else {
-          // Extract unique models from CSV
           const parsed = parseCSV(data.csv)
           const titleIndex = parsed.headers.indexOf('title')
-          const uniqueModels = titleIndex >= 0 
-            ? [...new Set(parsed.rows.map(row => row[titleIndex]).filter(Boolean))]
-                .sort()
-                .slice(0, 100)
-            : []
+          const priceIndex = parsed.headers.indexOf('price')
+          const mileageIndex = parsed.headers.indexOf('mileage')
+          const yearIndex = parsed.headers.indexOf('year')
+          const ccIndex = parsed.headers.indexOf('cc')
+          const storeIndex = parsed.headers.indexOf('store')
+          const urlIndex = parsed.headers.indexOf('url')
+
+          const rows = parsed.rows.map(row => {
+            const title = titleIndex >= 0 ? row[titleIndex] : ''
+            const meta = parseTitleMeta(title)
+            return {
+              row,
+              title,
+              store: storeIndex >= 0 && row[storeIndex] ? row[storeIndex] : meta.store,
+              year: yearIndex >= 0 && row[yearIndex] ? row[yearIndex] : meta.year,
+              brand: meta.brand,
+              model: meta.model,
+              itemId: meta.itemId,
+              price: priceIndex >= 0 ? parseInt(row[priceIndex]) || null : null,
+              mileage: mileageIndex >= 0 ? parseInt(row[mileageIndex]) || null : null,
+              cc: ccIndex >= 0 ? parseInt(row[ccIndex]) || null : null,
+              url: urlIndex >= 0 ? row[urlIndex] : '',
+            }
+          })
+
+          const uniqueModels = [...new Set(rows.map(item => item.model || item.title).filter(Boolean))]
+            .sort()
+            .slice(0, 100)
+
           setModels(uniqueModels)
+          setParsedHeaders(parsed.headers)
+          setParsedRows(rows)
           setResult(data)
         }
       } catch (jsonError) {
@@ -99,24 +162,12 @@ export default function Home() {
     return { headers, rows: dataRows }
   }
 
-  function getParsedCSV() {
-    if (!result || !result.csv) return { headers: [], rows: [] }
-    return parseCSV(result.csv)
-  }
-
-  function getFilteredData(parsed) {
-    if (!parsed.headers.length || !selectedModel) {
-      return { headers: [], rows: [], stats: {}, storeStats: [] }
+  function getFilteredData() {
+    if (!parsedRows.length || !selectedModel) {
+      return { headers: parsedHeaders, rows: [], stats: {}, storeStats: [] }
     }
 
-    const titleIndex = parsed.headers.indexOf('title')
-    const priceIndex = parsed.headers.indexOf('price')
-    const mileageIndex = parsed.headers.indexOf('mileage')
-    const yearIndex = parsed.headers.indexOf('year')
-    const ccIndex = parsed.headers.indexOf('cc')
-    const storeIndex = parsed.headers.indexOf('store')
-
-    const filtered = parsed.rows.filter(row => titleIndex >= 0 && row[titleIndex] === selectedModel)
+    const filtered = parsedRows.filter(item => item.model === selectedModel)
     const stats = {
       count: filtered.length,
       avgPrice: 0,
@@ -135,30 +186,25 @@ export default function Home() {
     const years = []
     const ccs = []
 
-    filtered.forEach(row => {
-      const price = parseInt(row[priceIndex]) || 0
-      const mileage = parseInt(row[mileageIndex]) || 0
-      const year = parseInt(row[yearIndex]) || 0
-      const cc = parseInt(row[ccIndex]) || 0
-      const store = storeIndex >= 0 ? (row[storeIndex] || '未知販售地') : '未知販售地'
+    filtered.forEach(item => {
+      if (item.price > 0) prices.push(item.price)
+      if (item.mileage > 0) mileages.push(item.mileage)
+      if (item.year && !Number.isNaN(Number(item.year))) years.push(Number(item.year))
+      if (item.cc > 0) ccs.push(item.cc)
 
-      if (price > 0) prices.push(price)
-      if (mileage > 0) mileages.push(mileage)
-      if (year > 0) years.push(year)
-      if (cc > 0) ccs.push(cc)
-
-      if (!storeMap[store]) {
-        storeMap[store] = { count: 0, prices: [], mileages: [], minPrice: Infinity, maxPrice: 0 }
+      const storeName = item.store || '未知販售地'
+      if (!storeMap[storeName]) {
+        storeMap[storeName] = { count: 0, prices: [], mileages: [], minPrice: Infinity, maxPrice: 0 }
       }
-      const storeStat = storeMap[store]
+      const storeStat = storeMap[storeName]
       storeStat.count += 1
-      if (price > 0) {
-        storeStat.prices.push(price)
-        storeStat.minPrice = Math.min(storeStat.minPrice, price)
-        storeStat.maxPrice = Math.max(storeStat.maxPrice, price)
+      if (item.price > 0) {
+        storeStat.prices.push(item.price)
+        storeStat.minPrice = Math.min(storeStat.minPrice, item.price)
+        storeStat.maxPrice = Math.max(storeStat.maxPrice, item.price)
       }
-      if (mileage > 0) {
-        storeStat.mileages.push(mileage)
+      if (item.mileage > 0) {
+        storeStat.mileages.push(item.mileage)
       }
     })
 
@@ -181,23 +227,20 @@ export default function Home() {
 
     const storeStats = Object.keys(storeMap).map(storeName => {
       const storeStat = storeMap[storeName]
-      const avgPrice = storeStat.prices.length > 0 ? Math.round(storeStat.prices.reduce((a, b) => a + b, 0) / storeStat.prices.length) : 0
-      const avgMileage = storeStat.mileages.length > 0 ? Math.round(storeStat.mileages.reduce((a, b) => a + b, 0) / storeStat.mileages.length) : 0
       return {
         store: storeName,
         count: storeStat.count,
-        avgPrice,
+        avgPrice: storeStat.prices.length > 0 ? Math.round(storeStat.prices.reduce((a, b) => a + b, 0) / storeStat.prices.length) : 0,
         minPrice: storeStat.minPrice === Infinity ? 0 : storeStat.minPrice,
         maxPrice: storeStat.maxPrice,
-        avgMileage,
+        avgMileage: storeStat.mileages.length > 0 ? Math.round(storeStat.mileages.reduce((a, b) => a + b, 0) / storeStat.mileages.length) : 0,
       }
     }).sort((a, b) => b.count - a.count)
 
-    return { headers: parsed.headers, rows: filtered, stats, storeStats }
+    return { headers: parsedHeaders, rows: filtered, stats, storeStats }
   }
 
-  const parsedCSV = getParsedCSV()
-  const filteredData = getFilteredData(parsedCSV)
+  const filteredData = getFilteredData()
 
   return (
     <div style={{ maxWidth: 1200, margin: '40px auto', fontFamily: 'Arial, sans-serif', lineHeight: 1.6 }}>
@@ -390,28 +433,19 @@ export default function Home() {
                           </tr>
                         </thead>
                         <tbody>
-                          {(() => {
-                            const titleIndex = filteredData.headers.indexOf('title')
-                            const storeIndex = filteredData.headers.indexOf('store')
-                            const priceIndex = filteredData.headers.indexOf('price')
-                            const mileageIndex = filteredData.headers.indexOf('mileage')
-                            const yearIndex = filteredData.headers.indexOf('year')
-                            const ccIndex = filteredData.headers.indexOf('cc')
-                            const urlIndex = filteredData.headers.indexOf('url')
-                            return filteredData.rows.slice(0, 50).map((row, rowIndex) => (
-                              <tr key={rowIndex} style={{ background: rowIndex % 2 === 0 ? '#fff' : '#f0f2f5', borderBottom: '1px solid #e0e0e0' }}>
-                                <td style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'center' }}>{rowIndex + 1}</td>
-                                <td style={{ border: '1px solid #d0d0d0', padding: 10 }}>{storeIndex >= 0 ? row[storeIndex] : '-'}</td>
-                                <td style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'right' }}>{priceIndex >= 0 && row[priceIndex] ? `NT${Number(row[priceIndex]).toLocaleString()}` : '-'}</td>
-                                <td style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'right' }}>{mileageIndex >= 0 && row[mileageIndex] ? `${Number(row[mileageIndex]).toLocaleString()} km` : '-'}</td>
-                                <td style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'center' }}>{yearIndex >= 0 ? row[yearIndex] : '-'}</td>
-                                <td style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'center' }}>{ccIndex >= 0 ? row[ccIndex] : '-'}</td>
-                                <td style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'left', maxWidth: 230, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {urlIndex >= 0 && row[urlIndex] ? <a href={row[urlIndex]} target="_blank" rel="noreferrer" style={{ color: '#0d47a1' }}>前往連結</a> : '-'}
-                                </td>
-                              </tr>
-                            ))
-                          })()}
+                          {filteredData.rows.slice(0, 50).map((item, rowIndex) => (
+                            <tr key={rowIndex} style={{ background: rowIndex % 2 === 0 ? '#fff' : '#f0f2f5', borderBottom: '1px solid #e0e0e0' }}>
+                              <td style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'center' }}>{rowIndex + 1}</td>
+                              <td style={{ border: '1px solid #d0d0d0', padding: 10 }}>{item.store || '未知販售地'}</td>
+                              <td style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'right' }}>{item.price > 0 ? `NT${item.price.toLocaleString()}` : '-'}</td>
+                              <td style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'right' }}>{item.mileage > 0 ? `${item.mileage.toLocaleString()} km` : '-'}</td>
+                              <td style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'center' }}>{item.year || '-'}</td>
+                              <td style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'center' }}>{item.cc > 0 ? item.cc : '-'}</td>
+                              <td style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'left', maxWidth: 230, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {item.url ? <a href={item.url} target="_blank" rel="noreferrer" style={{ color: '#0d47a1' }}>前往連結</a> : '-'}
+                              </td>
+                            </tr>
+                          ))}
                         </tbody>
                       </table>
                     </div>
