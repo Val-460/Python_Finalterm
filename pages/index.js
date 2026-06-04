@@ -5,11 +5,15 @@ export default function Home() {
   const [maxPages, setMaxPages] = useState(5)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
+  const [selectedModel, setSelectedModel] = useState('')
+  const [models, setModels] = useState([])
 
   async function submit(event) {
     event.preventDefault()
     setLoading(true)
     setResult(null)
+    setSelectedModel('')
+    setModels([])
 
     try {
       const resp = await fetch('/api/scrape', {
@@ -24,6 +28,18 @@ export default function Home() {
         if (!resp.ok) {
           setResult({ error: `API 錯誤 (${resp.status}): ${data.error || text}`, logs: data.logs })
         } else {
+          // Extract unique models from CSV
+          const parsed = parseCSV(data.csv)
+          const titleIndex = parsed.headers.indexOf('title')
+          const uniqueModels = titleIndex >= 0 
+            ? [...new Set(parsed.rows.map(row => row[titleIndex]).filter(Boolean))]
+                .sort()
+                .slice(0, 100)
+            : []
+          setModels(uniqueModels)
+          if (uniqueModels.length > 0) {
+            setSelectedModel(uniqueModels[0])
+          }
           setResult(data)
         }
       } catch (jsonError) {
@@ -53,6 +69,71 @@ export default function Home() {
     const rows = lines.slice(1).map(line => line.split(','))
     return { headers, rows }
   }
+
+  function getFilteredData() {
+    if (!result || !result.csv || !selectedModel) {
+      return { headers: [], rows: [], stats: {} }
+    }
+    const parsed = parseCSV(result.csv)
+    const titleIndex = parsed.headers.indexOf('title')
+    const priceIndex = parsed.headers.indexOf('price')
+    const mileageIndex = parsed.headers.indexOf('mileage')
+    const yearIndex = parsed.headers.indexOf('year')
+    const ccIndex = parsed.headers.indexOf('cc')
+    
+    const filtered = parsed.rows.filter(row => 
+      titleIndex >= 0 && row[titleIndex] === selectedModel
+    )
+
+    // Calculate statistics
+    const stats = {
+      count: filtered.length,
+      avgPrice: 0,
+      minPrice: 0,
+      maxPrice: 0,
+      avgMileage: 0,
+      minMileage: 0,
+      maxMileage: 0,
+      avgYear: 0,
+      avgCC: 0,
+    }
+
+    if (filtered.length > 0) {
+      const prices = filtered
+        .map(row => parseInt(row[priceIndex]) || 0)
+        .filter(p => p > 0)
+      const mileages = filtered
+        .map(row => parseInt(row[mileageIndex]) || 0)
+        .filter(m => m > 0)
+      const years = filtered
+        .map(row => parseInt(row[yearIndex]) || 0)
+        .filter(y => y > 0)
+      const ccs = filtered
+        .map(row => parseInt(row[ccIndex]) || 0)
+        .filter(c => c > 0)
+
+      if (prices.length > 0) {
+        stats.avgPrice = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length)
+        stats.minPrice = Math.min(...prices)
+        stats.maxPrice = Math.max(...prices)
+      }
+      if (mileages.length > 0) {
+        stats.avgMileage = Math.round(mileages.reduce((a, b) => a + b, 0) / mileages.length)
+        stats.minMileage = Math.min(...mileages)
+        stats.maxMileage = Math.max(...mileages)
+      }
+      if (years.length > 0) {
+        stats.avgYear = Math.round(years.reduce((a, b) => a + b, 0) / years.length)
+      }
+      if (ccs.length > 0) {
+        stats.avgCC = Math.round(ccs.reduce((a, b) => a + b, 0) / ccs.length)
+      }
+    }
+
+    return { headers: parsed.headers, rows: filtered, stats }
+  }
+
+  const filteredData = getFilteredData()
 
   return (
     <div style={{ maxWidth: 1200, margin: '40px auto', fontFamily: 'Arial, sans-serif', lineHeight: 1.6 }}>
@@ -111,26 +192,94 @@ export default function Home() {
 
           {result.csv && (
             <div style={{ marginBottom: 24 }}>
-              <h3>試算表預覽</h3>
-              <div style={{ marginBottom: 12, display: 'flex', gap: 10 }}>
-                <button onClick={() => download(result.csv_filename || 'listings.csv', result.csv, 'text/csv')} style={{ padding: '8px 12px', background: '#111', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>下載 CSV</button>
+              <h3>車款篩選與數據分析</h3>
+              
+              {/* Model Selector */}
+              {models.length > 0 && (
+                <div style={{ marginBottom: 18, padding: 14, background: '#f5f9fc', borderRadius: 6, border: '1px solid #d1e3f2' }}>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <strong>選擇車款：</strong>
+                    <select 
+                      value={selectedModel} 
+                      onChange={(e) => setSelectedModel(e.target.value)}
+                      style={{ padding: 10, fontSize: 14, borderRadius: 4, border: '1px solid #999', width: '100%', maxWidth: 400 }}
+                    >
+                      {models.map((model, idx) => (
+                        <option key={idx} value={model}>{model}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              )}
+
+              {/* Statistics Cards */}
+              {selectedModel && filteredData.stats.count > 0 && (
+                <div style={{ marginBottom: 18, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
+                  <div style={{ background: '#e3f2fd', border: '1px solid #90caf9', borderRadius: 6, padding: 12, textAlign: 'center' }}>
+                    <div style={{ fontSize: 12, color: '#555', marginBottom: 4 }}>總筆數</div>
+                    <div style={{ fontSize: 24, fontWeight: 'bold', color: '#1976d2' }}>{filteredData.stats.count}</div>
+                  </div>
+                  {filteredData.stats.avgPrice > 0 && (
+                    <>
+                      <div style={{ background: '#f3e5f5', border: '1px solid #ce93d8', borderRadius: 6, padding: 12, textAlign: 'center' }}>
+                        <div style={{ fontSize: 12, color: '#555', marginBottom: 4 }}>平均價格</div>
+                        <div style={{ fontSize: 18, fontWeight: 'bold', color: '#7b1fa2' }}>NT${filteredData.stats.avgPrice.toLocaleString()}</div>
+                      </div>
+                      <div style={{ background: '#fce4ec', border: '1px solid #f48fb1', borderRadius: 6, padding: 12, textAlign: 'center' }}>
+                        <div style={{ fontSize: 12, color: '#555', marginBottom: 4 }}>價格範圍</div>
+                        <div style={{ fontSize: 14, fontWeight: 'bold', color: '#c2185b' }}>NT${filteredData.stats.minPrice.toLocaleString()} ~ NT${filteredData.stats.maxPrice.toLocaleString()}</div>
+                      </div>
+                    </>
+                  )}
+                  {filteredData.stats.avgMileage > 0 && (
+                    <>
+                      <div style={{ background: '#e8f5e9', border: '1px solid #81c784', borderRadius: 6, padding: 12, textAlign: 'center' }}>
+                        <div style={{ fontSize: 12, color: '#555', marginBottom: 4 }}>平均里程</div>
+                        <div style={{ fontSize: 18, fontWeight: 'bold', color: '#388e3c' }}>{filteredData.stats.avgMileage.toLocaleString()} km</div>
+                      </div>
+                      <div style={{ background: '#ffe0b2', border: '1px solid #ffb74d', borderRadius: 6, padding: 12, textAlign: 'center' }}>
+                        <div style={{ fontSize: 12, color: '#555', marginBottom: 4 }}>里程範圍</div>
+                        <div style={{ fontSize: 14, fontWeight: 'bold', color: '#e65100' }}>{filteredData.stats.minMileage.toLocaleString()} ~ {filteredData.stats.maxMileage.toLocaleString()} km</div>
+                      </div>
+                    </>
+                  )}
+                  {filteredData.stats.avgYear > 0 && (
+                    <div style={{ background: '#fff3e0', border: '1px solid #ffe0b2', borderRadius: 6, padding: 12, textAlign: 'center' }}>
+                      <div style={{ fontSize: 12, color: '#555', marginBottom: 4 }}>平均年份</div>
+                      <div style={{ fontSize: 18, fontWeight: 'bold', color: '#ef6c00' }}>{filteredData.stats.avgYear}</div>
+                    </div>
+                  )}
+                  {filteredData.stats.avgCC > 0 && (
+                    <div style={{ background: '#f1f8e9', border: '1px solid #c5e1a5', borderRadius: 6, padding: 12, textAlign: 'center' }}>
+                      <div style={{ fontSize: 12, color: '#555', marginBottom: 4 }}>平均排氣量</div>
+                      <div style={{ fontSize: 18, fontWeight: 'bold', color: '#558b2f' }}>{filteredData.stats.avgCC} cc</div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Download and Full Data Buttons */}
+              <div style={{ marginBottom: 12, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <button onClick={() => download(result.csv_filename || 'listings.csv', result.csv, 'text/csv')} style={{ padding: '8px 12px', background: '#111', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>下載全部 CSV</button>
                 {result.excel && (
-                  <button onClick={() => { const link = document.createElement('a'); link.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' + result.excel; link.download = result.excel_filename || 'report.xlsx'; link.click(); }} style={{ padding: '8px 12px', background: '#1f7f20', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>下載 Excel</button>
+                  <button onClick={() => { const link = document.createElement('a'); link.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' + result.excel; link.download = result.excel_filename || 'report.xlsx'; link.click(); }} style={{ padding: '8px 12px', background: '#1f7f20', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>下載全部 Excel</button>
                 )}
               </div>
-              {(() => {
-                const parsed = parseCSV(result.csv)
-                return (
+
+              {/* Filtered Data Table */}
+              {selectedModel && filteredData.rows.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 14, fontWeight: 'bold', marginBottom: 8, color: '#333' }}>篩選後的車款資料（{selectedModel}） - 共 {filteredData.rows.length} 筆</div>
                   <div style={{ overflowX: 'auto', border: '1px solid #ccc', borderRadius: 6, boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, backgroundColor: '#fff' }}>
                       <thead>
                         <tr style={{ background: '#4472C4', color: '#fff' }}>
                           <th style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'center', fontWeight: 'bold', width: 40, minWidth: 40 }}>#</th>
-                          {parsed.headers.map((h, i) => <th key={i} style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'left', fontWeight: 'bold' }}>{h}</th>)}
+                          {filteredData.headers.map((h, i) => <th key={i} style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'left', fontWeight: 'bold' }}>{h}</th>)}
                         </tr>
                       </thead>
                       <tbody>
-                        {parsed.rows.slice(0, 50).map((row, i) => (
+                        {filteredData.rows.slice(0, 50).map((row, i) => (
                           <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f0f2f5', borderBottom: '1px solid #e0e0e0' }}>
                             <td style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'center', fontSize: 12, color: '#666', background: i % 2 === 0 ? '#f5f5f5' : '#efefef', fontWeight: 500 }}>{i + 1}</td>
                             {row.map((cell, j) => <td key={j} style={{ border: '1px solid #d0d0d0', padding: 10, maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cell}</td>)}
@@ -138,10 +287,39 @@ export default function Home() {
                         ))}
                       </tbody>
                     </table>
-                    {parsed.rows.length > 50 && <div style={{ padding: 12, background: '#f9f9f9', borderTop: '1px solid #ccc', textAlign: 'center', color: '#666', fontSize: 12 }}>...還有 {parsed.rows.length - 50} 筆資料，請下載 Excel 或 CSV 查看完整內容</div>}
+                    {filteredData.rows.length > 50 && <div style={{ padding: 12, background: '#f9f9f9', borderTop: '1px solid #ccc', textAlign: 'center', color: '#666', fontSize: 12 }}>...還有 {filteredData.rows.length - 50} 筆資料，請下載 Excel 或 CSV 查看完整內容</div>}
                   </div>
-                )
-              })()}
+                </div>
+              )}
+
+              {/* Full data table (original view) */}
+              <details style={{ marginTop: 16 }}>
+                <summary style={{ cursor: 'pointer', fontWeight: 'bold', padding: 10, background: '#f5f5f5', borderRadius: 4 }}>檢視全部資料（{(() => { const p = parseCSV(result.csv); return p.rows.length })()}筆）</summary>
+                <div style={{ marginTop: 12, overflowX: 'auto', border: '1px solid #ccc', borderRadius: 6, boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                  {(() => {
+                    const parsed = parseCSV(result.csv)
+                    return (
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, backgroundColor: '#fff' }}>
+                        <thead>
+                          <tr style={{ background: '#4472C4', color: '#fff' }}>
+                            <th style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'center', fontWeight: 'bold', width: 40, minWidth: 40 }}>#</th>
+                            {parsed.headers.map((h, i) => <th key={i} style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'left', fontWeight: 'bold' }}>{h}</th>)}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {parsed.rows.slice(0, 50).map((row, i) => (
+                            <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f0f2f5', borderBottom: '1px solid #e0e0e0' }}>
+                              <td style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'center', fontSize: 12, color: '#666', background: i % 2 === 0 ? '#f5f5f5' : '#efefef', fontWeight: 500 }}>{i + 1}</td>
+                              {row.map((cell, j) => <td key={j} style={{ border: '1px solid #d0d0d0', padding: 10, maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cell}</td>)}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )
+                  })()}
+                  {(() => { const p = parseCSV(result.csv); return p.rows.length > 50 && <div style={{ padding: 12, background: '#f9f9f9', borderTop: '1px solid #ccc', textAlign: 'center', color: '#666', fontSize: 12 }}>...還有 {p.rows.length - 50} 筆資料，請下載 Excel 或 CSV 查看完整內容</div> })()}
+                </div>
+              </details>
             </div>
           )}
 
