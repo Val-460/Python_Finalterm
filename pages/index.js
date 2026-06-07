@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import Head from 'next/head'
 
 export default function Home() {
   const [keywords, setKeywords] = useState('')
@@ -181,6 +182,8 @@ export default function Home() {
       minMileage: 0,
       maxMileage: 0,
       avgYear: 0,
+      minYear: 0,
+      maxYear: 0,
       avgCC: 0,
     }
 
@@ -224,6 +227,8 @@ export default function Home() {
     }
     if (years.length > 0) {
       stats.avgYear = Math.round(years.reduce((a, b) => a + b, 0) / years.length)
+      stats.minYear = Math.min(...years)
+      stats.maxYear = Math.max(...years)
     }
     if (ccs.length > 0) {
       stats.avgCC = Math.round(ccs.reduce((a, b) => a + b, 0) / ccs.length)
@@ -247,238 +252,556 @@ export default function Home() {
   const filteredData = getFilteredData()
 
   return (
-    <div style={{ maxWidth: 1200, margin: '40px auto', fontFamily: 'Arial, sans-serif', lineHeight: 1.6 }}>
-      <h1>2Motor 二手機車 Serverless Web UI</h1>
-      <p>這個網站將原本的二手機車爬蟲與分析程式包裝為一個可直接部署到 Vercel 的 Serverless 應用。</p>
-      <p>輸入搜尋關鍵字與最大頁數後，網站會呼叫 serverless Python API，抓取 2Motor 二手機車資料並產出報表。</p>
+    <>
+      <Head>
+        <title>貳輪嶼二手機車數據分析系統</title>
+        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+      </Head>
 
-      <section style={{ padding: 18, border: '1px solid #e0e0e0', borderRadius: 10, background: '#f9fafb', marginTop: 24 }}>
-        <h2>操作說明</h2>
-        <ol>
-          <li>輸入「關鍵字」來篩選車款，例如「125」、「Gogoro」、「SYM」。</li>
-          <li>設定要抓取的最大頁數，數字越大可能抓到更多資料。</li>
-          <li>按下「開始抓取並分析」，等待結果顯示於下方。</li>
-          <li>若成功，您可以直接在網站上瀏覽試算表、下載 CSV 與 HTML 報表，並檢視分析圖。</li>
-        </ol>
-      </section>
+      <style dangerouslySetInnerHTML={{ __html: `
+        body {
+          background: radial-gradient(circle at top, #0f172a, #020617);
+          color: #f1f5f9;
+          font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+          margin: 0;
+          padding: 0;
+          min-height: 100vh;
+        }
 
-      <form onSubmit={submit} style={{ display: 'grid', gap: 14, marginTop: 24 }}>
-        <label style={{ display: 'flex', flexDirection: 'column' }}>
-          關鍵字：
-          <input
-            value={keywords}
-            onChange={(e) => setKeywords(e.target.value)}
-            style={{ width: '100%', padding: '10px', marginTop: 6 }}
-            placeholder="例如: gogoro 或 125"
-          />
-        </label>
+        .dashboard-container {
+          max-width: 1300px;
+          margin: 0 auto;
+          padding: 40px 20px;
+        }
 
-        <label style={{ display: 'flex', flexDirection: 'column' }}>
-          最大頁數：
-          <input
-            type="number"
-            value={maxPages}
-            min={1}
-            onChange={(e) => setMaxPages(e.target.value)}
-            style={{ width: 120, padding: '10px', marginTop: 6 }}
-          />
-        </label>
+        .header-panel {
+          text-align: center;
+          margin-bottom: 40px;
+        }
 
-        <button type="submit" disabled={loading} style={{ width: 220, padding: '12px 18px', background: '#0070f3', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
-          {loading ? '執行中...' : '開始抓取並分析'}
-        </button>
-      </form>
+        .title-gradient {
+          background: linear-gradient(135deg, #38bdf8, #818cf8);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          font-weight: 700;
+          font-size: 2.6rem;
+          margin: 0 0 10px 0;
+          letter-spacing: -0.5px;
+        }
 
-      {result && (
-        <div style={{ marginTop: 30, padding: 18, border: '1px solid #ddd', borderRadius: 10, background: '#fff' }}>
-          <h2>執行結果</h2>
-          {result.error && <pre style={{ color: 'red', whiteSpace: 'pre-wrap' }}>{result.error}</pre>}
-          {result.logs && (
-            <details style={{ marginBottom: 16 }}>
-              <summary style={{ cursor: 'pointer', fontWeight: 'bold' }}>檢視日誌（{result.logs.length} 行）</summary>
-              <pre style={{ whiteSpace: 'pre-wrap', maxHeight: 240, overflow: 'auto', background: '#f4f4f4', padding: 12, borderRadius: 6, marginTop: 8 }}>{result.logs.join('\n')}</pre>
-            </details>
-          )}
-          {result.rows !== undefined && <div style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 12 }}>✓ 成功抓取 {result.rows} 筆資料</div>}
+        .subtitle {
+          color: #94a3b8;
+          font-size: 1.1rem;
+          margin: 0;
+        }
 
-          {result.csv && (
-            <div style={{ marginBottom: 24 }}>
-              <h3>車款篩選與數據分析</h3>
-              <div style={{ marginBottom: 12, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-                <div style={{ fontSize: 14, color: '#333' }}>
-                  可選車款：{models.length} 種
+        .glass-card {
+          background: rgba(15, 23, 42, 0.6);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 16px;
+          padding: 24px;
+          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+          margin-bottom: 30px;
+        }
+
+        .glass-card h2, .glass-card h3 {
+          margin-top: 0;
+          font-weight: 600;
+          color: #f8fafc;
+        }
+
+        .form-grid {
+          display: grid;
+          grid-template-columns: 1fr 120px auto;
+          gap: 16px;
+          align-items: flex-end;
+        }
+
+        @media (max-width: 768px) {
+          .form-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        .form-group {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .form-group label {
+          font-size: 0.9rem;
+          font-weight: 500;
+          color: #94a3b8;
+        }
+
+        .input-field {
+          background: rgba(30, 41, 59, 0.7);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          color: #fff;
+          border-radius: 8px;
+          padding: 12px;
+          font-size: 1rem;
+          transition: all 0.2s ease;
+        }
+
+        .input-field:focus {
+          outline: none;
+          border-color: #38bdf8;
+          box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
+        }
+
+        .primary-btn {
+          background: linear-gradient(135deg, #0284c7, #4f46e5);
+          color: #fff;
+          border: none;
+          border-radius: 8px;
+          padding: 14px 28px;
+          font-size: 1rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          box-shadow: 0 4px 15px rgba(79, 70, 229, 0.3);
+          height: 48px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .primary-btn:hover:not(:disabled) {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(79, 70, 229, 0.5);
+        }
+
+        .primary-btn:disabled {
+          background: #334155;
+          color: #94a3b8;
+          cursor: not-allowed;
+          box-shadow: none;
+        }
+
+        .sec-btn {
+          background: rgba(30, 41, 59, 0.8);
+          color: #f1f5f9;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 8px;
+          padding: 10px 18px;
+          font-size: 0.9rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .sec-btn:hover {
+          background: rgba(51, 65, 85, 0.8);
+          border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .excel-btn {
+          background: rgba(31, 127, 32, 0.2);
+          color: #4ade80;
+          border: 1px solid rgba(74, 222, 128, 0.3);
+        }
+
+        .excel-btn:hover {
+          background: rgba(31, 127, 32, 0.4);
+          border-color: rgba(74, 222, 128, 0.5);
+        }
+
+        .stats-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 16px;
+          margin-bottom: 24px;
+        }
+
+        .stat-item {
+          background: rgba(30, 41, 59, 0.4);
+          border: 1px solid rgba(255, 255, 255, 0.05);
+          border-radius: 12px;
+          padding: 16px;
+          text-align: center;
+        }
+
+        .stat-val {
+          font-size: 1.8rem;
+          font-weight: 700;
+          color: #38bdf8;
+          margin-top: 4px;
+        }
+
+        .stat-val-purple {
+          color: #c084fc;
+        }
+
+        .stat-val-green {
+          color: #4ade80;
+        }
+
+        .stat-val-orange {
+          color: #fb923c;
+        }
+
+        .stat-label {
+          font-size: 0.85rem;
+          color: #94a3b8;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+
+        .table-wrapper {
+          overflow-x: auto;
+          border-radius: 12px;
+          border: 1px solid rgba(255, 255, 255, 0.05);
+          background: rgba(15, 23, 42, 0.4);
+          margin-bottom: 20px;
+        }
+
+        .custom-table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 0.9rem;
+          text-align: left;
+        }
+
+        .custom-table th {
+          background: rgba(15, 23, 42, 0.8);
+          color: #38bdf8;
+          padding: 14px 16px;
+          font-weight: 600;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .custom-table td {
+          padding: 14px 16px;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+          color: #e2e8f0;
+        }
+
+        .custom-table tr:hover {
+          background: rgba(255, 255, 255, 0.02);
+        }
+
+        .log-terminal {
+          background: #090d16;
+          border: 1px solid #1e293b;
+          border-radius: 8px;
+          padding: 16px;
+          font-family: 'Consolas', monospace;
+          font-size: 0.85rem;
+          max-height: 240px;
+          overflow-y: auto;
+          color: #38bdf8;
+        }
+
+        .section-divider {
+          border-top: 1px solid rgba(255, 255, 255, 0.08);
+          margin: 30px 0;
+        }
+
+        .select-wrapper {
+          position: relative;
+        }
+
+        .select-field {
+          width: 100%;
+          max-width: 500px;
+          background: rgba(30, 41, 59, 0.7);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          color: #fff;
+          border-radius: 8px;
+          padding: 12px;
+          font-size: 1rem;
+          cursor: pointer;
+        }
+
+        .select-field:focus {
+          outline: none;
+          border-color: #38bdf8;
+        }
+      ` }} />
+
+      <div className="dashboard-container">
+        <header className="header-panel">
+          <h1 className="title-gradient">貳輪嶼二手機車數據分析系統</h1>
+          <p className="subtitle">跨店車款分類分析 • 跨店價格比較 • 報表導出</p>
+        </header>
+
+        <section className="glass-card">
+          <h2>系統操作與條件篩選</h2>
+          <form onSubmit={submit} className="form-grid">
+            <div className="form-group">
+              <label>搜尋關鍵字：</label>
+              <input
+                value={keywords}
+                onChange={(e) => setKeywords(e.target.value)}
+                className="input-field"
+                placeholder="例如: gogoro 或 125 或 SYM"
+              />
+            </div>
+
+            <div className="form-group">
+              <label>最大頁數：</label>
+              <input
+                type="number"
+                value={maxPages}
+                min={1}
+                onChange={(e) => setMaxPages(e.target.value)}
+                className="input-field"
+              />
+            </div>
+
+            <button type="submit" disabled={loading} className="primary-btn">
+              {loading ? (
+                <span className="pulse">正在進行抓取與分析...</span>
+              ) : (
+                '開始抓取並分析'
+              )}
+            </button>
+          </form>
+        </section>
+
+        {result && (
+          <section className="glass-card">
+            <h2>分析結果與數據導出</h2>
+
+            {result.error && (
+              <div style={{ color: '#ef4444', background: 'rgba(239, 68, 68, 0.1)', padding: 14, borderRadius: 8, border: '1px solid rgba(239, 68, 68, 0.2)', marginBottom: 20 }}>
+                {result.error}
+              </div>
+            )}
+
+            {result.logs && (
+              <details style={{ marginBottom: 20 }}>
+                <summary style={{ cursor: 'pointer', fontWeight: '500', color: '#94a3b8', marginBottom: 10 }}>
+                  檢視執行日誌（{result.logs.length} 行）
+                </summary>
+                <div className="log-terminal">
+                  {result.logs.join('\n')}
                 </div>
-                <button onClick={() => download(result.csv_filename || 'listings.csv', result.csv, 'text/csv')} style={{ padding: '8px 12px', background: '#111', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>下載 CSV</button>
+              </details>
+            )}
+
+            {result.rows !== undefined && (
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginBottom: 24 }}>
+                <span className="accent-badge">
+                  ✓ 成功抓取與洗淨 {result.rows} 筆資料
+                </span>
+                
+                {result.csv && (
+                  <button onClick={() => download(result.csv_filename || 'listings.csv', result.csv, 'text/csv')} className="sec-btn">
+                    下載 CSV 原始檔
+                  </button>
+                )}
+
                 {result.excel && (
-                  <button onClick={() => { const link = document.createElement('a'); link.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' + result.excel; link.download = result.excel_filename || 'report.xlsx'; link.click(); }} style={{ padding: '8px 12px', background: '#1f7f20', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>下載 Excel</button>
+                  <button onClick={() => {
+                    const link = document.createElement('a');
+                    link.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' + result.excel;
+                    link.download = result.excel_filename || 'report.xlsx';
+                    link.click();
+                  }} className="sec-btn excel-btn">
+                    下載 Excel (含分頁分析)
+                  </button>
+                )}
+
+                {result.html && (
+                  <button onClick={() => download(result.html_filename || 'report.html', result.html, 'text/html')} className="sec-btn">
+                    下載 HTML 立體報表
+                  </button>
                 )}
               </div>
+            )}
 
-              {models.length > 0 && (
-                <div style={{ marginBottom: 20, padding: 14, background: '#f5f9fc', borderRadius: 6, border: '1px solid #d1e3f2' }}>
-                  <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <strong>請先選擇車款：</strong>
+            {models.length > 0 && (
+              <>
+                <div className="section-divider" />
+                
+                <div style={{ marginBottom: 24 }}>
+                  <label style={{ display: 'block', fontSize: '1rem', fontWeight: '600', color: '#38bdf8', marginBottom: 8 }}>
+                    選擇機車車款（不同分店之同款車已自動彙整）：
+                  </label>
+                  <div className="select-wrapper">
                     <select
                       value={selectedModel}
                       onChange={(e) => setSelectedModel(e.target.value)}
-                      style={{ padding: 10, fontSize: 14, borderRadius: 4, border: '1px solid #999', width: '100%', maxWidth: 500 }}
+                      className="select-field"
                     >
-                      <option value="">-- 選擇車款 --</option>
+                      <option value="">-- 請選擇車款 --</option>
                       {models.map((model, idx) => (
                         <option key={idx} value={model}>{model}</option>
                       ))}
                     </select>
-                  </label>
-                </div>
-              )}
-
-              {!selectedModel && models.length > 0 && (
-                <div style={{ marginBottom: 18, padding: 14, background: '#fff4e5', borderRadius: 6, border: '1px solid #ffd699' }}>
-                  <strong>提示：</strong> 請先從上方下拉選單選擇車款，系統會顯示該車款的販售位置、價格與里程統計。
-                </div>
-              )}
-
-              {selectedModel && filteredData.rows.length === 0 && (
-                <div style={{ marginBottom: 18, padding: 14, background: '#fdecea', borderRadius: 6, border: '1px solid #f5c6cb', color: '#721c24' }}>
-                  已選車款：<strong>{selectedModel}</strong>，目前沒有符合資料。
-                </div>
-              )}
-
-              {selectedModel && filteredData.rows.length > 0 && (
-                <>
-                  <div style={{ marginBottom: 18, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
-                    <div style={{ background: '#e3f2fd', border: '1px solid #90caf9', borderRadius: 6, padding: 12, textAlign: 'center' }}>
-                      <div style={{ fontSize: 12, color: '#555', marginBottom: 4 }}>總筆數</div>
-                      <div style={{ fontSize: 24, fontWeight: 'bold', color: '#1976d2' }}>{filteredData.stats.count}</div>
-                    </div>
-                    {filteredData.stats.avgPrice > 0 && (
-                      <div style={{ background: '#f3e5f5', border: '1px solid #ce93d8', borderRadius: 6, padding: 12, textAlign: 'center' }}>
-                        <div style={{ fontSize: 12, color: '#555', marginBottom: 4 }}>平均價格</div>
-                        <div style={{ fontSize: 18, fontWeight: 'bold', color: '#7b1fa2' }}>NT${filteredData.stats.avgPrice.toLocaleString()}</div>
-                      </div>
-                    )}
-                    {filteredData.stats.minPrice > 0 && (
-                      <div style={{ background: '#fce4ec', border: '1px solid #f48fb1', borderRadius: 6, padding: 12, textAlign: 'center' }}>
-                        <div style={{ fontSize: 12, color: '#555', marginBottom: 4 }}>價格範圍</div>
-                        <div style={{ fontSize: 14, fontWeight: 'bold', color: '#c2185b' }}>NT${filteredData.stats.minPrice.toLocaleString()} ~ NT${filteredData.stats.maxPrice.toLocaleString()}</div>
-                      </div>
-                    )}
-                    {filteredData.stats.avgMileage > 0 && (
-                      <div style={{ background: '#e8f5e9', border: '1px solid #81c784', borderRadius: 6, padding: 12, textAlign: 'center' }}>
-                        <div style={{ fontSize: 12, color: '#555', marginBottom: 4 }}>平均里程</div>
-                        <div style={{ fontSize: 18, fontWeight: 'bold', color: '#388e3c' }}>{filteredData.stats.avgMileage.toLocaleString()} km</div>
-                      </div>
-                    )}
-                    {filteredData.stats.minMileage > 0 && (
-                      <div style={{ background: '#ffe0b2', border: '1px solid #ffb74d', borderRadius: 6, padding: 12, textAlign: 'center' }}>
-                        <div style={{ fontSize: 12, color: '#555', marginBottom: 4 }}>里程範圍</div>
-                        <div style={{ fontSize: 14, fontWeight: 'bold', color: '#e65100' }}>{filteredData.stats.minMileage.toLocaleString()} ~ {filteredData.stats.maxMileage.toLocaleString()} km</div>
-                      </div>
-                    )}
-                    {filteredData.stats.avgYear > 0 && (
-                      <div style={{ background: '#fff3e0', border: '1px solid #ffe0b2', borderRadius: 6, padding: 12, textAlign: 'center' }}>
-                        <div style={{ fontSize: 12, color: '#555', marginBottom: 4 }}>平均年份</div>
-                        <div style={{ fontSize: 18, fontWeight: 'bold', color: '#ef6c00' }}>{filteredData.stats.avgYear}</div>
-                      </div>
-                    )}
-                    {filteredData.stats.avgCC > 0 && (
-                      <div style={{ background: '#f1f8e9', border: '1px solid #c5e1a5', borderRadius: 6, padding: 12, textAlign: 'center' }}>
-                        <div style={{ fontSize: 12, color: '#555', marginBottom: 4 }}>平均排氣量</div>
-                        <div style={{ fontSize: 18, fontWeight: 'bold', color: '#558b2f' }}>{filteredData.stats.avgCC} cc</div>
-                      </div>
-                    )}
                   </div>
+                </div>
 
-                  {filteredData.storeStats.length > 0 && (
-                    <div style={{ marginBottom: 18 }}>
-                      <div style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10 }}>不同販售位置統計</div>
-                      <div style={{ overflowX: 'auto', border: '1px solid #ccc', borderRadius: 6, boxShadow: '0 2px 4px rgba(0,0,0,0.08)' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, backgroundColor: '#fff' }}>
+                {!selectedModel && (
+                  <div style={{ background: 'rgba(56, 189, 248, 0.05)', border: '1px dashed rgba(56, 189, 248, 0.2)', borderRadius: 12, padding: 20, textAlign: 'center', color: '#94a3b8' }}>
+                    請在上方下拉式選單選擇欲查詢的「車款」，系統將會分類顯示該車款在全台各分店的價格比較與里程數據。
+                  </div>
+                )}
+
+                {selectedModel && filteredData.rows.length > 0 && (
+                  <>
+                    <h3 style={{ color: '#38bdf8', marginBottom: 16 }}>
+                      車款數據分析：{selectedModel}
+                    </h3>
+                    
+                    <div className="stats-grid">
+                      <div className="stat-item">
+                        <div className="stat-label">上架總筆數</div>
+                        <div className="stat-val">{filteredData.stats.count} 筆</div>
+                      </div>
+                      
+                      {filteredData.stats.avgPrice > 0 && (
+                        <div className="stat-item">
+                          <div className="stat-label">平均價格</div>
+                          <div className="stat-val stat-val-purple">NT$ {filteredData.stats.avgPrice.toLocaleString()}</div>
+                        </div>
+                      )}
+
+                      {filteredData.stats.minPrice > 0 && (
+                        <div className="stat-item">
+                          <div className="stat-label">價格區間</div>
+                          <div className="stat-val stat-val-green">
+                            NT$ {filteredData.stats.minPrice.toLocaleString()} ~ {filteredData.stats.maxPrice.toLocaleString()}
+                          </div>
+                        </div>
+                      )}
+
+                      {filteredData.stats.avgMileage > 0 && (
+                        <div className="stat-item">
+                          <div className="stat-label">平均里程</div>
+                          <div className="stat-val stat-val-orange">{filteredData.stats.avgMileage.toLocaleString()} km</div>
+                        </div>
+                      )}
+
+                      {filteredData.stats.minYear > 0 && (
+                        <div className="stat-item">
+                          <div className="stat-label">出廠年份區間</div>
+                          <div className="stat-val">
+                            {filteredData.stats.minYear === filteredData.stats.maxYear ? filteredData.stats.minYear : `${filteredData.stats.minYear} ~ ${filteredData.stats.maxYear}`}
+                          </div>
+                        </div>
+                      )}
+
+                      {filteredData.stats.avgCC > 0 && (
+                        <div className="stat-item">
+                          <div className="stat-label">排氣量 (平均)</div>
+                          <div className="stat-val">{filteredData.stats.avgCC} cc</div>
+                        </div>
+                      )}
+                    </div>
+
+                    {filteredData.storeStats.length > 0 && (
+                      <div style={{ marginBottom: 30 }}>
+                        <h4 style={{ color: '#94a3b8', margin: '0 0 12px 0' }}>各店售價與上架車數比較（跨店比較）</h4>
+                        <div className="table-wrapper">
+                          <table className="custom-table">
+                            <thead>
+                              <tr>
+                                <th>販售分店</th>
+                                <th style={{ textAlign: 'center' }}>上架數量</th>
+                                <th style={{ textAlign: 'right' }}>最低價格</th>
+                                <th style={{ textAlign: 'right' }}>最高價格</th>
+                                <th style={{ textAlign: 'right' }}>平均價格</th>
+                                <th style={{ textAlign: 'right' }}>平均行駛里程</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {filteredData.storeStats.map((store, idx) => (
+                                <tr key={idx}>
+                                  <td>{store.store}</td>
+                                  <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{store.count}</td>
+                                  <td style={{ textAlign: 'right', color: '#4ade80' }}>
+                                    {store.minPrice > 0 ? `NT$ ${store.minPrice.toLocaleString()}` : '-'}
+                                  </td>
+                                  <td style={{ textAlign: 'right', color: '#f87171' }}>
+                                    {store.maxPrice > 0 ? `NT$ ${store.maxPrice.toLocaleString()}` : '-'}
+                                  </td>
+                                  <td style={{ textAlign: 'right', fontWeight: 'bold' }}>
+                                    {store.avgPrice > 0 ? `NT$ ${store.avgPrice.toLocaleString()}` : '-'}
+                                  </td>
+                                  <td style={{ textAlign: 'right', color: '#fb923c' }}>
+                                    {store.avgMileage > 0 ? `${store.avgMileage.toLocaleString()} km` : '-'}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    <div>
+                      <h4 style={{ color: '#94a3b8', margin: '0 0 12px 0' }}>詳細車輛清單</h4>
+                      <div className="table-wrapper">
+                        <table className="custom-table">
                           <thead>
-                            <tr style={{ background: '#1976d2', color: '#fff' }}>
-                              <th style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'left' }}>販售位置</th>
-                              <th style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'center' }}>筆數</th>
-                              <th style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'right' }}>平均價格</th>
-                              <th style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'right' }}>最低價格</th>
-                              <th style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'right' }}>最高價格</th>
-                              <th style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'right' }}>平均里程</th>
+                            <tr>
+                              <th style={{ width: 50, textAlign: 'center' }}>#</th>
+                              <th>販售分店</th>
+                              <th style={{ textAlign: 'right' }}>售價</th>
+                              <th style={{ textAlign: 'right' }}>里程</th>
+                              <th style={{ textAlign: 'center' }}>出廠年份</th>
+                              <th style={{ textAlign: 'center' }}>排氣量</th>
+                              <th>官網商品連結</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {filteredData.storeStats.map((store, idx) => (
-                              <tr key={idx} style={{ background: idx % 2 === 0 ? '#fff' : '#f7fbff' }}>
-                                <td style={{ border: '1px solid #d0d0d0', padding: 10 }}>{store.store}</td>
-                                <td style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'center' }}>{store.count}</td>
-                                <td style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'right' }}>{store.avgPrice > 0 ? `NT${store.avgPrice.toLocaleString()}` : '-'}</td>
-                                <td style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'right' }}>{store.minPrice > 0 ? `NT${store.minPrice.toLocaleString()}` : '-'}</td>
-                                <td style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'right' }}>{store.maxPrice > 0 ? `NT${store.maxPrice.toLocaleString()}` : '-'}</td>
-                                <td style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'right' }}>{store.avgMileage > 0 ? `${store.avgMileage.toLocaleString()} km` : '-'}</td>
+                            {filteredData.rows.slice(0, 50).map((item, rowIndex) => (
+                              <tr key={rowIndex}>
+                                <td style={{ textAlign: 'center', color: '#94a3b8' }}>{rowIndex + 1}</td>
+                                <td>{item.store || '未知店家'}</td>
+                                <td style={{ textAlign: 'right', fontWeight: 'bold', color: '#c084fc' }}>
+                                  {item.price > 0 ? `NT$ ${item.price.toLocaleString()}` : '電洽'}
+                                </td>
+                                <td style={{ textAlign: 'right', color: '#fb923c' }}>
+                                  {item.mileage > 0 ? `${item.mileage.toLocaleString()} km` : '-'}
+                                </td>
+                                <td style={{ textAlign: 'center' }}>{item.year || '-'}</td>
+                                <td style={{ textAlign: 'center' }}>{item.cc > 0 ? `${item.cc} cc` : '-'}</td>
+                                <td>
+                                  {item.url ? (
+                                    <a href={item.url} target="_blank" rel="noreferrer" style={{ color: '#38bdf8', textDecoration: 'none', fontWeight: '500' }}>
+                                      前往貳輪嶼商品頁 ↗
+                                    </a>
+                                  ) : (
+                                    '-'
+                                  )}
+                                </td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
                       </div>
+                      {filteredData.rows.length > 50 && (
+                        <div style={{ textAlign: 'center', padding: '10px 0', color: '#64748b', fontSize: '0.85rem' }}>
+                          ...僅顯示前 50 筆，請點擊上方「下載 Excel」或「下載 HTML」查看完整數據。
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </>
+                )}
+              </>
+            )}
 
-                  <div style={{ marginBottom: 18 }}>
-                    <div style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10 }}>篩選後數據表格（只顯示主要欄位）</div>
-                    <div style={{ overflowX: 'auto', border: '1px solid #ccc', borderRadius: 6, boxShadow: '0 2px 4px rgba(0,0,0,0.08)' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, backgroundColor: '#fff' }}>
-                        <thead>
-                          <tr style={{ background: '#4472C4', color: '#fff' }}>
-                            <th style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'center', width: 40 }}>#</th>
-                            <th style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'left' }}>販售位置</th>
-                            <th style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'right' }}>價格</th>
-                            <th style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'right' }}>里程</th>
-                            <th style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'center' }}>年份</th>
-                            <th style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'center' }}>排氣量</th>
-                            <th style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'left' }}>連結</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {filteredData.rows.slice(0, 50).map((item, rowIndex) => (
-                            <tr key={rowIndex} style={{ background: rowIndex % 2 === 0 ? '#fff' : '#f0f2f5', borderBottom: '1px solid #e0e0e0' }}>
-                              <td style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'center' }}>{rowIndex + 1}</td>
-                              <td style={{ border: '1px solid #d0d0d0', padding: 10 }}>{item.store || '未知販售地'}</td>
-                              <td style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'right' }}>{item.price > 0 ? `NT${item.price.toLocaleString()}` : '-'}</td>
-                              <td style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'right' }}>{item.mileage > 0 ? `${item.mileage.toLocaleString()} km` : '-'}</td>
-                              <td style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'center' }}>{item.year || '-'}</td>
-                              <td style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'center' }}>{item.cc > 0 ? item.cc : '-'}</td>
-                              <td style={{ border: '1px solid #d0d0d0', padding: 10, textAlign: 'left', maxWidth: 230, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {item.url ? <a href={item.url} target="_blank" rel="noreferrer" style={{ color: '#0d47a1' }}>前往連結</a> : '-'}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    {filteredData.rows.length > 50 && <div style={{ padding: 12, background: '#f9f9f9', borderTop: '1px solid #ccc', textAlign: 'center', color: '#666', fontSize: 12 }}>...還有 {filteredData.rows.length - 50} 筆資料，請下載完整 Excel 或 CSV 查看全部內容</div>}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          {result.html && (
-            <div style={{ marginBottom: 24 }}>
-              <button onClick={() => download(result.html_filename || 'report.html', result.html, 'text/html')} style={{ padding: '8px 12px', background: '#111', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>下載 HTML 報表</button>
-            </div>
-          )}
-
-          {result.png && (
-            <div style={{ marginBottom: 24 }}>
-              <h3>分析圖表</h3>
-              <img src={`data:image/png;base64,${result.png}`} alt="Analysis" style={{ maxWidth: '100%', borderRadius: 10, border: '1px solid #ddd' }} />
-            </div>
-          )}
-        </div>
-      )}
-
-      <section style={{ marginTop: 32, padding: 18, border: '1px solid #e0e0e0', borderRadius: 10, background: '#f9fafb' }}>
-        <h2>本網站做什麼</h2>
-        <p>此網站整合了原始的二手機車爬蟲與分析程式：透過服務端 Python API 抓取 2Motor 車款資料，解析價格、里程、年份與排氣量，並產生報表與圖表。</p>
-      </section>
-    </div>
+            {result.png && (
+              <div style={{ marginTop: 30 }}>
+                <h3 style={{ color: '#38bdf8', marginBottom: 16 }}>數據分析圖表</h3>
+                <div style={{ background: 'rgba(15, 23, 42, 0.5)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: 12, padding: 16, textAlign: 'center' }}>
+                  <img src={`data:image/png;base64,${result.png}`} alt="Analysis" style={{ maxWidth: '100%', borderRadius: 8 }} />
+                </div>
+              </div>
+            )}
+          </section>
+        )}
+      </div>
+    </>
   )
 }

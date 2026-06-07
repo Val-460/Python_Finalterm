@@ -55,32 +55,114 @@ def analyze_and_plot(data_list: list[dict], outputs: Dict[str, str], log_callbac
     return df
 
 
-def create_excel_report(df, excel_path: str, log_callback: Callable[[str], None]) -> None:
+def get_model_summary(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return pd.DataFrame(columns=[
+            "車款名稱", "廠牌", "上架數量", "平均價格", "最低價格", "最高價格", "平均里程", "出廠年份區間", "排氣量(cc)", "上架店家"
+        ])
+
+    df_temp = df.copy()
+    df_temp["model"] = df_temp["model"].fillna("未知車款").astype(str).str.strip()
+    df_temp["brand"] = df_temp["brand"].fillna("未知廠牌").astype(str).str.strip()
+    df_temp["store"] = df_temp["store"].fillna("未知店家").astype(str).str.strip()
+
+    summary_data = []
+    for model_name, group in df_temp.groupby("model"):
+        brand = group["brand"].iloc[0] if not group["brand"].empty else "未知廠牌"
+        cc = group["cc"].iloc[0] if not group["cc"].empty and not pd.isna(group["cc"].iloc[0]) else "未知"
+        count = len(group)
+
+        # Prices
+        prices = pd.to_numeric(group["price"], errors="coerce").dropna()
+        avg_price = int(prices.mean()) if not prices.empty else "N/A"
+        min_price = int(prices.min()) if not prices.empty else "N/A"
+        max_price = int(prices.max()) if not prices.empty else "N/A"
+
+        # Mileages
+        mileages = pd.to_numeric(group["mileage"], errors="coerce").dropna()
+        avg_mileage = int(mileages.mean()) if not mileages.empty else "N/A"
+
+        # Stores
+        stores = sorted(list(set(group["store"].dropna().astype(str))))
+        stores_str = ", ".join(stores)
+
+        # Years
+        years = pd.to_numeric(group["year"], errors="coerce").dropna()
+        if not years.empty:
+            min_y = int(years.min())
+            max_y = int(years.max())
+            year_range = f"{min_y}" if min_y == max_y else f"{min_y} ~ {max_y}"
+        else:
+            year_range = "N/A"
+
+        summary_data.append({
+            "車款名稱": model_name,
+            "廠牌": brand,
+            "上架數量": count,
+            "平均價格": avg_price,
+            "最低價格": min_price,
+            "最高價格": max_price,
+            "平均里程": avg_mileage,
+            "出廠年份區間": year_range,
+            "排氣量(cc)": cc,
+            "上架店家": stores_str
+        })
+
+    summary_df = pd.DataFrame(summary_data)
+    if not summary_df.empty:
+        summary_df = summary_df.sort_values(by="上架數量", ascending=False).reset_index(drop=True)
+    return summary_df
+
+
+def create_excel_report(df: pd.DataFrame, excel_path: str, log_callback: Callable[[str], None]) -> None:
     try:
-        df.to_excel(excel_path, index=False, engine="openpyxl")
+        summary_df = get_model_summary(df)
+        with pd.ExcelWriter(excel_path, engine="openpyxl") as writer:
+            summary_df.to_excel(writer, sheet_name="車款彙整分析", index=False)
+            df.to_excel(writer, sheet_name="所有車輛清單", index=False)
         log_callback(f"[Data] 已成功匯出 Excel 試算表：{excel_path}")
     except Exception as e:
         log_callback(f"[Error] 匯出 Excel 失敗：{e}")
 
 
-def create_html_report(df, html_path: str, log_callback: Callable[[str], None]) -> None:
+def create_html_report(df: pd.DataFrame, html_path: str, log_callback: Callable[[str], None]) -> None:
     try:
+        summary_df = get_model_summary(df)
+        
         style = """
             <style>
-                body { font-family: 'Microsoft JhengHei', Arial, sans-serif; background: #f7f7f7; color: #333; }
-                h1, h2 { margin: 0.3em 0; }
-                .container { width: 100%; max-width: 1280px; margin: 20px auto; padding: 20px; background: #fff; box-shadow: 0 0 20px rgba(0,0,0,0.06); }
-                table.spreadsheet-table { border-collapse: collapse; width: 100%; font-size: 13px; }
-                table.spreadsheet-table th, table.spreadsheet-table td { border: 1px solid #d6d6d6; padding: 8px 10px; }
-                table.spreadsheet-table th { background: #f0f4f8; color: #111; }
-                table.spreadsheet-table tr:nth-child(even) { background: #fcfcfc; }
-                .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 18px; }
-                .summary-card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px 14px; }
-                .summary-card strong { display: block; font-size: 16px; margin-bottom: 6px; }
+                body { font-family: 'Microsoft JhengHei', Arial, sans-serif; background: #0d1117; color: #c9d1d9; margin: 0; padding: 20px; }
+                h1, h2 { color: #58a6ff; margin: 0.5em 0; }
+                .container { width: 100%; max-width: 1280px; margin: 20px auto; padding: 25px; background: #161b22; border: 1px solid #30363d; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+                .tab-bar { display: flex; border-bottom: 2px solid #30363d; margin-bottom: 20px; }
+                .tab-btn { background: none; border: none; color: #8b949e; padding: 10px 20px; font-size: 16px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.2s ease; }
+                .tab-btn:hover { color: #c9d1d9; }
+                .tab-btn.active { color: #58a6ff; border-bottom: 2px solid #58a6ff; font-weight: bold; }
+                .tab-content { display: none; }
+                .tab-content.active { display: block; }
+                table.spreadsheet-table { border-collapse: collapse; width: 100%; font-size: 13px; color: #c9d1d9; margin-top: 10px; }
+                table.spreadsheet-table th, table.spreadsheet-table td { border: 1px solid #30363d; padding: 10px 12px; text-align: left; }
+                table.spreadsheet-table th { background: #21262d; color: #58a6ff; font-weight: 600; }
+                table.spreadsheet-table tr:nth-child(even) { background: #161b22; }
+                table.spreadsheet-table tr:hover { background: #21262d; }
+                .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
+                .summary-card { background: #21262d; border: 1px solid #30363d; border-radius: 8px; padding: 16px; }
+                .summary-card strong { display: block; font-size: 14px; color: #8b949e; margin-bottom: 6px; }
+                .summary-card span { font-size: 24px; font-weight: bold; color: #58a6ff; }
             </style>
+            <script>
+                function switchTab(tabId) {
+                    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+                    document.getElementById('btn-' + tabId).classList.add('active');
+                    document.getElementById(tabId).classList.add('active');
+                }
+            </script>
         """
-        summary_html = df.describe(include='all').round(2).to_html(classes='summary-table')
+        
+        summary_html = summary_df.to_html(classes='spreadsheet-table', index=False, escape=False)
         data_html = df.to_html(classes='spreadsheet-table', index=False, escape=False)
+        
         html = f"""
             <html lang='zh-Hant'>
             <head>
@@ -91,15 +173,26 @@ def create_html_report(df, html_path: str, log_callback: Callable[[str], None]) 
             <body>
                 <div class='container'>
                     <h1>2Motor 二手機車試算表報表</h1>
-                    <p>總筆數：{len(df)}</p>
-                    <div class='summary'>
-                        <div class='summary-card'><strong>資料筆數</strong>{len(df)}</div>
-                        <div class='summary-card'><strong>價格最小</strong>{int(df['price'].min()) if not df['price'].dropna().empty else 'N/A'}</div>
-                        <div class='summary-card'><strong>價格最大</strong>{int(df['price'].max()) if not df['price'].dropna().empty else 'N/A'}</div>
-                        <div class='summary-card'><strong>平均價格</strong>{int(df['price'].mean()) if not df['price'].dropna().empty else 'N/A'}</div>
+                    
+                    <div class='summary-grid'>
+                        <div class='summary-card'><strong>總上架車輛數</strong><span>{len(df)}</span></div>
+                        <div class='summary-card'><strong>不重複車款數</strong><span>{len(summary_df)}</span></div>
+                        <div class='summary-card'><strong>平均價格 (元)</strong><span>{int(df['price'].mean()) if not df['price'].dropna().empty else 'N/A'}</span></div>
+                        <div class='summary-card'><strong>最低價格 (元)</strong><span>{int(df['price'].min()) if not df['price'].dropna().empty else 'N/A'}</span></div>
                     </div>
-                    {summary_html}
-                    {data_html}
+                    
+                    <div class='tab-bar'>
+                        <button id='btn-tab-summary' class='tab-btn active' onclick="switchTab('tab-summary')">車款彙整分析 ({len(summary_df)} 款)</button>
+                        <button id='btn-tab-raw' class='tab-btn' onclick="switchTab('tab-raw')">所有車輛清單 ({len(df)} 筆)</button>
+                    </div>
+                    
+                    <div id='tab-summary' class='tab-content active'>
+                        {summary_html}
+                    </div>
+                    
+                    <div id='tab-raw' class='tab-content'>
+                        {data_html}
+                    </div>
                 </div>
             </body>
             </html>
