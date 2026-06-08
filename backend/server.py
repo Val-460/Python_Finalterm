@@ -184,8 +184,8 @@ def parse_price(price_str: str) -> float:
     match = re.search(r'\d+', cleaned)
     return float(match.group()) if match else 0.0
 
-async def scrape_products(max_pages: int = 3) -> List[Dict[str, Any]]:
-    """以 Playwright 爬取貳輪部品電商前 max_pages 頁數據"""
+async def scrape_products(max_pages: Optional[int] = None) -> List[Dict[str, Any]]:
+    """以 Playwright 爬取貳輪部品電商所有頁面的商品數據"""
     products = []
     base_url = "https://shop.2motor.tw"
     
@@ -198,7 +198,12 @@ async def scrape_products(max_pages: int = 3) -> List[Dict[str, Any]]:
         page = await context.new_page()
         page.set_default_timeout(30000)
 
-        for page_num in range(1, max_pages + 1):
+        page_num = 1
+        while True:
+            if max_pages and page_num > max_pages:
+                logger.info(f"已達到設定的最大頁面限制 ({max_pages})，停止爬取。")
+                break
+                
             url = f"{base_url}/collections/all?page={page_num}"
             logger.info(f"正在爬取第 {page_num} 頁: {url}")
             try:
@@ -211,6 +216,12 @@ async def scrape_products(max_pages: int = 3) -> List[Dict[str, Any]]:
                 )
                 if not cards:
                     cards = await page.query_selector_all("a[href*='/products/']")
+                
+                if not cards:
+                    logger.info(f"在第 {page_num} 頁未找到商品卡片，可能已達末頁，結束爬取。")
+                    break
+
+                added_before = len(products)
                 
                 seen_urls = set()
                 for card in cards:
@@ -303,8 +314,16 @@ async def scrape_products(max_pages: int = 3) -> List[Dict[str, Any]]:
                         "discount_rate": round(discount_rate, 4)
                     })
                     seen_urls.add(full_url)
+                
+                added_after = len(products)
+                if added_after == added_before:
+                    logger.info(f"在第 {page_num} 頁沒有成功新增任何商品，可能已達末頁，結束爬取。")
+                    break
+                    
+                page_num += 1
             except Exception as e:
                 logger.error(f"爬取第 {page_num} 頁時發生錯誤: {str(e)}")
+                break
         await browser.close()
     return products
 
@@ -472,10 +491,11 @@ def home():
     return {"status": "healthy", "swagger": "/docs"}
 
 @app.post("/api/v1/crawl", response_model=CrawlTriggerResponse)
-async def trigger_crawl_endpoint(db: Session = Depends(get_db)):
+async def trigger_crawl_endpoint(max_pages: Optional[int] = None, db: Session = Depends(get_db)):
     try:
         # 使用獨立 thread/loop 執行爬蟲，繞開 Uvicorn 預設事件迴圈對 Playwright 的限制
-        scraped_data = run_async_in_new_loop(scrape_products(max_pages=3))
+        # 預設 max_pages=None，代表爬取所有頁面
+        scraped_data = run_async_in_new_loop(scrape_products(max_pages=max_pages))
         if not scraped_data:
             raise Exception("未爬到商品資料")
             

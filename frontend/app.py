@@ -151,7 +151,7 @@ class MotorAnalysisApp:
 
         action_frame = tk.LabelFrame(sidebar, text=" 大數據分析操作 ", bg=self.panel_color, fg=self.accent_color, font=('Microsoft JhengHei', 9), padx=10, pady=10, bd=1, relief='solid')
         action_frame.pack(fill=tk.X, padx=15, pady=10)
-        self.crawl_btn = tk.Button(action_frame, text="🚀 觸發雲端爬蟲 (前3頁)", bg="#27ae60", fg="#ffffff", activebackground="#2ecc71", activeforeground="#ffffff", font=('Microsoft JhengHei', 10, 'bold'), bd=0, height=2, command=self.start_crawl_thread)
+        self.crawl_btn = tk.Button(action_frame, text="🚀 觸發雲端爬蟲 (全部頁面)", bg="#27ae60", fg="#ffffff", activebackground="#2ecc71", activeforeground="#ffffff", font=('Microsoft JhengHei', 10, 'bold'), bd=0, height=2, command=self.start_crawl_thread)
         self.crawl_btn.pack(fill=tk.X, pady=8)
         self.load_btn = tk.Button(action_frame, text="📊 撈取與分析數據", bg="#e67e22", fg="#ffffff", activebackground="#f39c12", activeforeground="#ffffff", font=('Microsoft JhengHei', 10, 'bold'), bd=0, height=2, command=self.load_data_and_charts)
         self.load_btn.pack(fill=tk.X, pady=8)
@@ -283,7 +283,7 @@ class MotorAnalysisApp:
 
     def start_crawl_thread(self):
         self.crawl_btn.configure(state=tk.DISABLED)
-        self.progress_text.set("正在執行爬蟲中...\n(使用 Playwright 爬取前3頁，約需 15-30 秒，請稍候...)")
+        self.progress_text.set("正在執行爬蟲中...\n(使用 Playwright 爬取所有頁面，約需 1-2 分鐘，請稍候...)")
         thread = threading.Thread(target=self.run_crawl)
         thread.daemon = True
         thread.start()
