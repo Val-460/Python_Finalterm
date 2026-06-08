@@ -59,6 +59,12 @@ class APIClient:
             raise Exception("下載圖表影像失敗")
         return response.content
 
+    def get_crawl_status(self) -> Dict[str, Any]:
+        response = requests.get(f"{self.base_url}/api/v1/crawl/status", timeout=5)
+        if response.status_code != 200:
+            raise Exception("取得爬蟲狀態失敗")
+        return response.json()
+
 # =====================================================================
 # 2. 圖片轉換輔助工具 (IMAGE UTILS)
 # =====================================================================
@@ -155,6 +161,11 @@ class MotorAnalysisApp:
         self.crawl_btn.pack(fill=tk.X, pady=8)
         self.load_btn = tk.Button(action_frame, text="📊 撈取與分析數據", bg="#e67e22", fg="#ffffff", activebackground="#f39c12", activeforeground="#ffffff", font=('Microsoft JhengHei', 10, 'bold'), bd=0, height=2, command=self.load_data_and_charts)
         self.load_btn.pack(fill=tk.X, pady=8)
+
+        # 進度條元件 (展示爬取頁面進度)
+        self.progress_bar = ttk.Progressbar(action_frame, orient=tk.HORIZONTAL, length=200, mode='determinate')
+        self.progress_bar.pack(fill=tk.X, pady=8)
+        self.progress_bar['value'] = 0
 
         self.progress_text = tk.StringVar(value="等待指令...")
         progress_lbl = tk.Label(sidebar, textvariable=self.progress_text, bg=self.panel_color, fg=self.sec_text_color, font=('Microsoft JhengHei', 9), justify=tk.LEFT, wraplength=230)
@@ -283,10 +294,20 @@ class MotorAnalysisApp:
 
     def start_crawl_thread(self):
         self.crawl_btn.configure(state=tk.DISABLED)
-        self.progress_text.set("正在執行爬蟲中...\n(使用 Playwright 爬取所有頁面，約需 1-2 分鐘，請稍候...)")
+        self.progress_bar['value'] = 0
+        self.progress_bar['maximum'] = 16  # 預估共 16 頁
+        self.progress_text.set("正在初始化爬蟲中...")
+        
+        # 啟動爬蟲背景執行緒
         thread = threading.Thread(target=self.run_crawl)
         thread.daemon = True
         thread.start()
+        
+        # 啟動進度條更新輪詢
+        self.polling_active = True
+        poll_thread = threading.Thread(target=self.poll_crawl_status_loop)
+        poll_thread.daemon = True
+        poll_thread.start()
 
     def run_crawl(self):
         try:
@@ -295,14 +316,41 @@ class MotorAnalysisApp:
         except Exception as e:
             self.root.after(0, self.on_crawl_failed, str(e))
 
+    def poll_crawl_status_loop(self):
+        import time
+        while self.polling_active:
+            try:
+                data = self.client.get_crawl_status()
+                if data["is_running"]:
+                    curr = data["current_page"]
+                    status_text = data["status"]
+                    scraped_count = data["scraped_count"]
+                    # 安全地於 GUI 執行緒更新進度條與文字
+                    self.root.after(0, self.update_progress, curr, status_text, scraped_count)
+            except Exception:
+                pass
+            time.sleep(0.5)
+
+    def update_progress(self, current_page, status_text, scraped_count):
+        # 動態調整進度條的最大值以適應網頁更新
+        if current_page > self.progress_bar['maximum']:
+            self.progress_bar['maximum'] = current_page
+            
+        self.progress_bar['value'] = current_page
+        self.progress_text.set(f"正在執行爬蟲中...\n({status_text} / {int(self.progress_bar['maximum'])} 頁)\n目前已取得 {scraped_count} 筆商品")
+
     def on_crawl_success(self, result):
+        self.polling_active = False
         self.crawl_btn.configure(state=tk.NORMAL)
+        self.progress_bar['value'] = self.progress_bar['maximum']
         messagebox.showinfo("爬蟲完工", f"資料更新成功！\n共爬取了 {result['scraped_count']} 個商品。")
         self.progress_text.set(f"爬蟲成功！已更新 {result['scraped_count']} 件商品資料。")
         self.load_data_and_charts()
 
     def on_crawl_failed(self, err_msg):
+        self.polling_active = False
         self.crawl_btn.configure(state=tk.NORMAL)
+        self.progress_bar['value'] = 0
         messagebox.showerror("爬蟲錯誤", f"無法完成爬蟲: {err_msg}")
         self.progress_text.set(f"爬蟲失敗。原因: {err_msg}")
 

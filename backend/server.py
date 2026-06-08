@@ -95,6 +95,16 @@ else:
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+# 全局爬蟲狀態
+CRAWL_STATUS = {
+    "is_running": False,
+    "current_page": 0,
+    "total_pages": 16,
+    "scraped_count": 0,
+    "status": "idle",
+    "message": ""
+}
+
 # 取得資料庫 Session 依賴注入
 def get_db():
     db = SessionLocal()
@@ -204,6 +214,12 @@ async def scrape_products(max_pages: Optional[int] = None) -> List[Dict[str, Any
                 logger.info(f"已達到設定的最大頁面限制 ({max_pages})，停止爬取。")
                 break
                 
+            # 更新全局爬蟲狀態
+            CRAWL_STATUS["is_running"] = True
+            CRAWL_STATUS["current_page"] = page_num
+            CRAWL_STATUS["scraped_count"] = len(products)
+            CRAWL_STATUS["status"] = f"正在爬取第 {page_num} 頁"
+
             url = f"{base_url}/collections/all?page={page_num}"
             logger.info(f"正在爬取第 {page_num} 頁: {url}")
             try:
@@ -492,6 +508,13 @@ def home():
 
 @app.post("/api/v1/crawl", response_model=CrawlTriggerResponse)
 async def trigger_crawl_endpoint(max_pages: Optional[int] = None, db: Session = Depends(get_db)):
+    # 初始化全局爬蟲狀態
+    CRAWL_STATUS["is_running"] = True
+    CRAWL_STATUS["current_page"] = 0
+    CRAWL_STATUS["scraped_count"] = 0
+    CRAWL_STATUS["status"] = "初始化爬蟲..."
+    CRAWL_STATUS["message"] = ""
+    
     try:
         # 使用獨立 thread/loop 執行爬蟲，繞開 Uvicorn 預設事件迴圈對 Playwright 的限制
         # 預設 max_pages=None，代表爬取所有頁面
@@ -514,13 +537,30 @@ async def trigger_crawl_endpoint(max_pages: Optional[int] = None, db: Session = 
         db.commit()
         
         generate_charts(db_products)
+        
+        # 更新狀態為成功
+        CRAWL_STATUS["is_running"] = False
+        CRAWL_STATUS["status"] = "success"
+        CRAWL_STATUS["message"] = "更新成功"
+        CRAWL_STATUS["scraped_count"] = len(db_products)
+        
         return CrawlTriggerResponse(status="success", scraped_count=len(db_products), message="更新成功")
     except Exception as e:
         logger.error(f"爬蟲異常: {str(e)}")
         log_entry = ScrapeLog(status="FAILED", products_count=0, message=str(e))
         db.add(log_entry)
         db.commit()
+        
+        # 更新狀態為失敗
+        CRAWL_STATUS["is_running"] = False
+        CRAWL_STATUS["status"] = "failed"
+        CRAWL_STATUS["message"] = str(e)
+        
         raise HTTPException(status_code=500, detail=f"執行失敗: {str(e)}")
+
+@app.get("/api/v1/crawl/status")
+def get_crawl_status():
+    return CRAWL_STATUS
 
 @app.get("/api/v1/products", response_model=List[ProductResponse])
 def list_products_endpoint(db: Session = Depends(get_db)):
