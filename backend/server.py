@@ -1,13 +1,3 @@
-import os
-import sys
-import asyncio
-import re
-import datetime
-import logging
-from typing import List, Dict, Any, Optional
-import requests
-from concurrent.futures import ThreadPoolExecutor
-
 # =====================================================================
 # 1. 基礎引用模組
 # =====================================================================
