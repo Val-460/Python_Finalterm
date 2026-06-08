@@ -45,9 +45,11 @@ logs/*
 !logs/.gitkeep
 *.log
 
-# Dynamic chart output (we want the folder, but not the actual generated images)
+# Dynamic chart and report outputs (we want the folder, but not the actual generated images/files)
 backend/static/charts/*.png
 !backend/static/charts/.gitkeep
+backend/static/reports/*
+!backend/static/reports/.gitkeep
 
 # IDEs and OS files
 .vscode/
