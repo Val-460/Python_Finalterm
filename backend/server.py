@@ -223,7 +223,7 @@ async def scrape_products(max_pages: Optional[int] = None) -> List[Dict[str, Any
             url = f"{base_url}/collections/all?page={page_num}"
             logger.info(f"正在爬取第 {page_num} 頁: {url}")
             try:
-                await page.goto(url, wait_until="networkidle")
+                await page.goto(url, wait_until="domcontentloaded")
                 await page.wait_for_timeout(3000)
                 
                 # Shopify 商品卡片選取器
