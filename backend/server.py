@@ -507,7 +507,7 @@ def home():
     return {"status": "healthy", "swagger": "/docs"}
 
 @app.post("/api/v1/crawl", response_model=CrawlTriggerResponse)
-async def trigger_crawl_endpoint(max_pages: Optional[int] = None, db: Session = Depends(get_db)):
+def trigger_crawl_endpoint(max_pages: Optional[int] = None, db: Session = Depends(get_db)):
     # 初始化全局爬蟲狀態
     CRAWL_STATUS["is_running"] = True
     CRAWL_STATUS["current_page"] = 0
