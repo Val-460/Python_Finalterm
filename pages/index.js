@@ -31,20 +31,21 @@ function cleanLocName(name) {
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [viewMode, setViewMode] = useState('grid');
   const [products, setProducts] = useState([]);
   const [analysis, setAnalysis] = useState(null);
   const [charts, setCharts] = useState(null);
   const [crawling, setCrawling] = useState(false);
   const [crawlStatus, setCrawlStatus] = useState(null);
   const [error, setError] = useState('');
-  
+
   // Filter States
   const [brandFilter, setBrandFilter] = useState('全部');
   const [locationFilter, setLocationFilter] = useState('全部');
   const [kwFilter, setKwFilter] = useState('');
   const [priceMaxFilter, setPriceMaxFilter] = useState('');
   const [mileMaxFilter, setMileMaxFilter] = useState('');
-  
+
   // Selection & Compare
   const [selectedBikes, setSelectedBikes] = useState([]);
   const [showCompareModal, setShowCompareModal] = useState(false);
@@ -167,7 +168,7 @@ export default function Home() {
     let valB = b[sortField];
     if (valA === undefined) return 1;
     if (valB === undefined) return -1;
-    
+
     if (typeof valA === 'string') {
       return sortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
     }
@@ -203,8 +204,8 @@ export default function Home() {
   const exportAppointmentGuide = (bike) => {
     if (!bike) return;
     const now = new Date();
-    const nowStr = `${now.getFullYear()}${(now.getMonth()+1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}_${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}`;
-    
+    const nowStr = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}_${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}`;
+
     const branchName = bike.location || "未指定分店";
     const branchInfo = BRANCHES.find(b => cleanLocName(b.name) === cleanLocName(branchName)) || BRANCHES[0];
 
@@ -282,7 +283,7 @@ export default function Home() {
               <p className="text-xs text-[#b2bec3]">貳輪嶼官方數據大數據即時定位分析與 O2O 導航面板</p>
             </div>
           </div>
-          
+
           <div className="flex gap-3 items-center">
             {crawling ? (
               <div className="flex items-center gap-2 text-sm text-[#e67e22]">
@@ -290,7 +291,7 @@ export default function Home() {
                 <span>{crawlStatus ? `${crawlStatus.status} (${crawlStatus.scraped_count} 筆)` : '執行爬網中...'}</span>
               </div>
             ) : (
-              <button 
+              <button
                 onClick={startCrawl}
                 className="bg-[#27ae60] hover:bg-[#2ecc71] text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-md"
               >
@@ -298,14 +299,14 @@ export default function Home() {
               </button>
             )}
 
-            <button 
+            <button
               onClick={loadData}
               className="bg-[#e67e22] hover:bg-[#f39c12] text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-md"
             >
               📊 載入數據
             </button>
-            
-            <a 
+
+            <a
               href="/api/v1/report/excel"
               className="bg-[#2980b9] hover:bg-[#3498db] text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-md inline-block"
             >
@@ -335,11 +336,10 @@ export default function Home() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`px-5 py-3 text-sm font-bold border-b-2 transition-all ${
-                activeTab === tab.id
+              className={`px-5 py-3 text-sm font-bold border-b-2 transition-all ${activeTab === tab.id
                   ? 'border-[#00adb5] text-[#00adb5]'
                   : 'border-transparent text-[#b2bec3] hover:text-[#eeeeee]'
-              }`}
+                }`}
             >
               {tab.label}
             </button>
@@ -370,7 +370,7 @@ export default function Home() {
             {/* Top 10 Tables Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* CP Top 10 */}
-              <div className="bg-[#1e1e24] p-5 rounded-xl border border-[#30363d] shadow-lg">
+              <div className="bg-[#1e1e24] p-5 rounded-xl border border-[#30363d] shadow-lg hover:border-[#2ecc71] transition-all duration-300">
                 <h2 className="text-lg font-bold text-[#2ecc71] mb-4 flex items-center gap-2">
                   🔥 全網性價比超值神車榜 Top 10 (越高越划算)
                 </h2>
@@ -378,6 +378,7 @@ export default function Home() {
                   <table className="w-full text-xs text-left text-[#eeeeee]">
                     <thead>
                       <tr className="border-b border-[#30363d] text-[#b2bec3] bg-[#121214]">
+                        <th className="p-3">圖片</th>
                         <th className="p-3">車款名稱</th>
                         <th className="p-3">年份</th>
                         <th className="p-3 text-right">里程 (km)</th>
@@ -391,8 +392,19 @@ export default function Home() {
                         .sort((a, b) => b.cp_index - a.cp_index)
                         .slice(0, 10)
                         .map((p, idx) => (
-                          <tr key={idx} className="border-b border-[#30363d] hover:bg-[#21262d]">
-                            <td className="p-3 font-semibold truncate max-w-[150px]">{p.title}</td>
+                          <tr key={idx} className="border-b border-[#30363d] hover:bg-[#21262d] transition-all">
+                            <td className="p-2">
+                              {p.img_url ? (
+                                <img src={p.img_url} alt={p.title} className="h-8 w-12 object-cover rounded border border-[#30363d]" />
+                              ) : (
+                                <div className="h-8 w-12 bg-[#121214] rounded border border-[#30363d] flex items-center justify-center text-[10px] text-[#555]">🏍️</div>
+                              )}
+                            </td>
+                            <td className="p-3 font-semibold truncate max-w-[150px]">
+                              <a href={p.url} target="_blank" className="hover:underline text-[#58a6ff]">
+                                {p.title}
+                              </a>
+                            </td>
                             <td className="p-3">{p.year}</td>
                             <td className="p-3 text-right">{intVal(p.mileage).toLocaleString()}</td>
                             <td className="p-3 text-right font-bold text-[#e67e22]">{intVal(p.current_price).toLocaleString()}</td>
@@ -408,7 +420,7 @@ export default function Home() {
               </div>
 
               {/* Low Mileage Top 10 */}
-              <div className="bg-[#1e1e24] p-5 rounded-xl border border-[#30363d] shadow-lg">
+              <div className="bg-[#1e1e24] p-5 rounded-xl border border-[#30363d] shadow-lg hover:border-[#58a6ff] transition-all duration-300">
                 <h2 className="text-lg font-bold text-[#58a6ff] mb-4 flex items-center gap-2">
                   🏍️ 全網低里程優質精選 Top 10
                 </h2>
@@ -416,6 +428,7 @@ export default function Home() {
                   <table className="w-full text-xs text-left text-[#eeeeee]">
                     <thead>
                       <tr className="border-b border-[#30363d] text-[#b2bec3] bg-[#121214]">
+                        <th className="p-3">圖片</th>
                         <th className="p-3">車款名稱</th>
                         <th className="p-3">年份</th>
                         <th className="p-3 text-right">里程 (km)</th>
@@ -429,16 +442,26 @@ export default function Home() {
                         .sort((a, b) => a.mileage - b.mileage)
                         .slice(0, 10)
                         .map((p, idx) => (
-                          <tr key={idx} className="border-b border-[#30363d] hover:bg-[#21262d]">
-                            <td className="p-3 font-semibold truncate max-w-[150px]">{p.title}</td>
+                          <tr key={idx} className="border-b border-[#30363d] hover:bg-[#21262d] transition-all">
+                            <td className="p-2">
+                              {p.img_url ? (
+                                <img src={p.img_url} alt={p.title} className="h-8 w-12 object-cover rounded border border-[#30363d]" />
+                              ) : (
+                                <div className="h-8 w-12 bg-[#121214] rounded border border-[#30363d] flex items-center justify-center text-[10px] text-[#555]">🏍️</div>
+                              )}
+                            </td>
+                            <td className="p-3 font-semibold truncate max-w-[150px]">
+                              <a href={p.url} target="_blank" className="hover:underline text-[#58a6ff]">
+                                {p.title}
+                              </a>
+                            </td>
                             <td className="p-3">{p.year}</td>
                             <td className="p-3 text-right font-bold text-[#58a6ff]">{intVal(p.mileage).toLocaleString()}</td>
                             <td className="p-3 text-right text-[#e67e22]">{intVal(p.current_price).toLocaleString()}</td>
                             <td className="p-3 text-center">{p.cp_index.toFixed(2)}</td>
                             <td className="p-3 text-center">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold text-white ${
-                                p.cp_label === '超值' ? 'bg-[#2ecc71]' : p.cp_label === '合理' ? 'bg-[#3498db]' : 'bg-[#e74c3c]'
-                              }`}>{p.cp_label}</span>
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold text-white ${p.cp_label === '超值' ? 'bg-[#2ecc71]' : p.cp_label === '合理' ? 'bg-[#3498db]' : 'bg-[#e74c3c]'
+                                }`}>{p.cp_label}</span>
                             </td>
                           </tr>
                         ))}
@@ -458,19 +481,19 @@ export default function Home() {
               <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
                 <div>
                   <label className="text-xs text-[#b2bec3] block mb-2">廠牌品牌</label>
-                  <select 
-                    value={brandFilter} 
+                  <select
+                    value={brandFilter}
                     onChange={e => setBrandFilter(e.target.value)}
                     className="w-full bg-[#121214] border border-[#30363d] rounded-lg p-2 text-sm text-[#eeeeee] focus:border-[#00adb5]"
                   >
                     {brands.map((b, i) => <option key={i} value={b}>{b}</option>)}
                   </select>
                 </div>
-                
+
                 <div>
                   <label className="text-xs text-[#b2bec3] block mb-2">實體門市</label>
-                  <select 
-                    value={locationFilter} 
+                  <select
+                    value={locationFilter}
                     onChange={e => setLocationFilter(e.target.value)}
                     className="w-full bg-[#121214] border border-[#30363d] rounded-lg p-2 text-sm text-[#eeeeee]"
                   >
@@ -481,9 +504,9 @@ export default function Home() {
 
                 <div>
                   <label className="text-xs text-[#b2bec3] block mb-2">預算上限 (萬元)</label>
-                  <input 
-                    type="number" 
-                    placeholder="不限" 
+                  <input
+                    type="number"
+                    placeholder="不限"
                     value={priceMaxFilter}
                     onChange={e => setPriceMaxFilter(e.target.value)}
                     className="w-full bg-[#121214] border border-[#30363d] rounded-lg p-2 text-sm text-[#eeeeee]"
@@ -492,9 +515,9 @@ export default function Home() {
 
                 <div>
                   <label className="text-xs text-[#b2bec3] block mb-2">里程上限 (公里)</label>
-                  <input 
-                    type="number" 
-                    placeholder="不限" 
+                  <input
+                    type="number"
+                    placeholder="不限"
                     value={mileMaxFilter}
                     onChange={e => setMileMaxFilter(e.target.value)}
                     className="w-full bg-[#121214] border border-[#30363d] rounded-lg p-2 text-sm text-[#eeeeee]"
@@ -503,9 +526,9 @@ export default function Home() {
 
                 <div>
                   <label className="text-xs text-[#b2bec3] block mb-2">關鍵字搜尋</label>
-                  <input 
-                    type="text" 
-                    placeholder="搜尋型號..." 
+                  <input
+                    type="text"
+                    placeholder="搜尋型號..."
                     value={kwFilter}
                     onChange={e => setKwFilter(e.target.value)}
                     className="w-full bg-[#121214] border border-[#30363d] rounded-lg p-2 text-sm text-[#eeeeee]"
@@ -513,7 +536,7 @@ export default function Home() {
                 </div>
 
                 <div className="flex gap-2">
-                  <button 
+                  <button
                     disabled={selectedBikes.length < 2}
                     onClick={() => setShowCompareModal(true)}
                     className="w-full bg-[#3f51b5] hover:bg-[#5c6bc0] disabled:bg-gray-700 disabled:opacity-40 text-white p-2 rounded-lg text-sm font-semibold transition-all"
@@ -524,78 +547,183 @@ export default function Home() {
               </div>
             </div>
 
-            {/* List Table */}
+            {/* List Table or Card Grid */}
             <div className="bg-[#1e1e24] p-5 rounded-xl border border-[#30363d] shadow-lg">
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-xs text-[#b2bec3]">已篩選出 {sortedProducts.length} 筆車輛資訊</span>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-[#b2bec3]">已篩選出 {sortedProducts.length} 筆車輛資訊</span>
+                  <div className="bg-[#121214] border border-[#30363d] rounded-lg p-0.5 flex gap-1">
+                    <button
+                      onClick={() => setViewMode('table')}
+                      className={`px-3 py-1 rounded text-xs font-semibold transition-all ${viewMode === 'table' ? 'bg-[#00adb5] text-white shadow' : 'text-[#b2bec3] hover:text-[#eeeeee]'
+                        }`}
+                    >
+                      📋 列表
+                    </button>
+                    <button
+                      onClick={() => setViewMode('grid')}
+                      className={`px-3 py-1 rounded text-xs font-semibold transition-all ${viewMode === 'grid' ? 'bg-[#00adb5] text-white shadow' : 'text-[#b2bec3] hover:text-[#eeeeee]'
+                        }`}
+                    >
+                      🎴 卡片
+                    </button>
+                  </div>
+                </div>
                 {selectedBikes.length > 0 && (
-                  <button 
+                  <button
                     onClick={() => setSelectedBikes([])}
                     className="text-xs text-[#e74c3c] hover:underline"
                   >
-                    清除選取
+                    清除選取 ({selectedBikes.length})
                   </button>
                 )}
               </div>
-              
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left text-[#eeeeee]">
-                  <thead>
-                    <tr className="border-b border-[#30363d] text-[#b2bec3] bg-[#121214] select-none cursor-pointer">
-                      <th className="p-3 text-center">選取</th>
-                      <th className="p-3" onClick={() => handleSort('title')}>商品名稱 {sortField === 'title' && (sortAsc ? '▲' : '▼')}</th>
-                      <th className="p-3 text-center" onClick={() => handleSort('brand')}>廠牌 {sortField === 'brand' && (sortAsc ? '▲' : '▼')}</th>
-                      <th className="p-3 text-center" onClick={() => handleSort('displacement')}>排氣量 {sortField === 'displacement' && (sortAsc ? '▲' : '▼')}</th>
-                      <th className="p-3 text-center" onClick={() => handleSort('year')}>年份 {sortField === 'year' && (sortAsc ? '▲' : '▼')}</th>
-                      <th className="p-3 text-right" onClick={() => handleSort('mileage')}>里程 {sortField === 'mileage' && (sortAsc ? '▲' : '▼')}</th>
-                      <th className="p-3 text-center" onClick={() => handleSort('location')}>門市 {sortField === 'location' && (sortAsc ? '▲' : '▼')}</th>
-                      <th className="p-3 text-right" onClick={() => handleSort('current_price')}>價格 {sortField === 'current_price' && (sortAsc ? '▲' : '▼')}</th>
-                      <th className="p-3 text-center" onClick={() => handleSort('cp_index')}>CP指數 {sortField === 'cp_index' && (sortAsc ? '▲' : '▼')}</th>
-                      <th className="p-3 text-center" onClick={() => handleSort('cp_label')}>評級 {sortField === 'cp_label' && (sortAsc ? '▲' : '▼')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedProducts.map((p, idx) => {
-                      const isSelected = !!selectedBikes.find(b => b.id === p.id);
-                      return (
-                        <tr 
-                          key={idx} 
-                          onClick={() => handleSelectBike(p)}
-                          className={`border-b border-[#30363d] hover:bg-[#21262d] cursor-pointer ${
-                            isSelected ? 'bg-[#00adb5] bg-opacity-10' : ''
+
+              {viewMode === 'table' ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left text-[#eeeeee]">
+                    <thead>
+                      <tr className="border-b border-[#30363d] text-[#b2bec3] bg-[#121214] select-none cursor-pointer">
+                        <th className="p-3 text-center">選取</th>
+                        <th className="p-3">縮圖</th>
+                        <th className="p-3" onClick={() => handleSort('title')}>商品名稱 {sortField === 'title' && (sortAsc ? '▲' : '▼')}</th>
+                        <th className="p-3 text-center" onClick={() => handleSort('brand')}>廠牌 {sortField === 'brand' && (sortAsc ? '▲' : '▼')}</th>
+                        <th className="p-3 text-center" onClick={() => handleSort('displacement')}>排氣量 {sortField === 'displacement' && (sortAsc ? '▲' : '▼')}</th>
+                        <th className="p-3 text-center" onClick={() => handleSort('year')}>年份 {sortField === 'year' && (sortAsc ? '▲' : '▼')}</th>
+                        <th className="p-3 text-right" onClick={() => handleSort('mileage')}>里程 {sortField === 'mileage' && (sortAsc ? '▲' : '▼')}</th>
+                        <th className="p-3 text-center" onClick={() => handleSort('location')}>門市 {sortField === 'location' && (sortAsc ? '▲' : '▼')}</th>
+                        <th className="p-3 text-right" onClick={() => handleSort('current_price')}>價格 {sortField === 'current_price' && (sortAsc ? '▲' : '▼')}</th>
+                        <th className="p-3 text-center" onClick={() => handleSort('cp_index')}>CP指數 {sortField === 'cp_index' && (sortAsc ? '▲' : '▼')}</th>
+                        <th className="p-3 text-center" onClick={() => handleSort('cp_label')}>評級 {sortField === 'cp_label' && (sortAsc ? '▲' : '▼')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedProducts.map((p, idx) => {
+                        const isSelected = !!selectedBikes.find(b => b.id === p.id);
+                        return (
+                          <tr
+                            key={idx}
+                            onClick={() => handleSelectBike(p)}
+                            className={`border-b border-[#30363d] hover:bg-[#21262d] cursor-pointer transition-all ${isSelected ? 'bg-[#00adb5] bg-opacity-10' : ''
+                              }`}
+                          >
+                            <td className="p-3 text-center" onClick={e => e.stopPropagation()}>
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => handleSelectBike(p)}
+                                className="rounded accent-[#00adb5] h-4 w-4"
+                              />
+                            </td>
+                            <td className="p-2" onClick={e => e.stopPropagation()}>
+                              {p.img_url ? (
+                                <img src={p.img_url} alt={p.title} className="h-10 w-14 object-cover rounded border border-[#30363d]" />
+                              ) : (
+                                <div className="h-10 w-14 bg-[#121214] rounded border border-[#30363d] flex items-center justify-center text-xs text-[#555]">🏍️</div>
+                              )}
+                            </td>
+                            <td className="p-3 font-semibold">
+                              <a href={p.url} target="_blank" onClick={e => e.stopPropagation()} className="hover:underline text-[#58a6ff]">
+                                {p.title}
+                              </a>
+                            </td>
+                            <td className="p-3 text-center">{p.brand}</td>
+                            <td className="p-3 text-center">{p.displacement} cc</td>
+                            <td className="p-3 text-center">{p.year}</td>
+                            <td className="p-3 text-right font-mono">{intVal(p.mileage).toLocaleString()} km</td>
+                            <td className="p-3 text-center text-[#b2bec3]">{p.location}</td>
+                            <td className="p-3 text-right font-bold text-[#e67e22]">NT$ {intVal(p.current_price).toLocaleString()}</td>
+                            <td className="p-3 text-center font-bold text-[#00adb5]">{p.cp_index.toFixed(2)}</td>
+                            <td className="p-3 text-center">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold text-white ${p.cp_label === '超值' ? 'bg-[#2ecc71]' : p.cp_label === '合理' ? 'bg-[#3498db]' : 'bg-[#e74c3c]'
+                                }`}>{p.cp_label}</span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {sortedProducts.map((p, idx) => {
+                    const isSelected = !!selectedBikes.find(b => b.id === p.id);
+                    return (
+                      <div
+                        key={idx}
+                        onClick={() => handleSelectBike(p)}
+                        className={`relative bg-[#121214] border rounded-xl overflow-hidden cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:border-[#00adb5] flex flex-col justify-between ${isSelected ? 'border-[#00adb5] ring-2 ring-[#00adb5] ring-opacity-50' : 'border-[#30363d]'
                           }`}
-                        >
-                          <td className="p-3 text-center" onClick={e => e.stopPropagation()}>
-                            <input 
-                              type="checkbox" 
-                              checked={isSelected}
-                              onChange={() => handleSelectBike(p)}
-                              className="rounded accent-[#00adb5]"
-                            />
-                          </td>
-                          <td className="p-3 font-semibold">
-                            <a href={p.url} target="_blank" onClick={e => e.stopPropagation()} className="hover:underline text-[#58a6ff]">
-                              {p.title}
-                            </a>
-                          </td>
-                          <td className="p-3 text-center">{p.brand}</td>
-                          <td className="p-3 text-center">{p.displacement} cc</td>
-                          <td className="p-3 text-center">{p.year}</td>
-                          <td className="p-3 text-right font-mono">{intVal(p.mileage).toLocaleString()} km</td>
-                          <td className="p-3 text-center text-[#b2bec3]">{p.location}</td>
-                          <td className="p-3 text-right font-bold text-[#e67e22]">NT$ {intVal(p.current_price).toLocaleString()}</td>
-                          <td className="p-3 text-center font-bold text-[#00adb5]">{p.cp_index.toFixed(2)}</td>
-                          <td className="p-3 text-center">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold text-white ${
-                              p.cp_label === '超值' ? 'bg-[#2ecc71]' : p.cp_label === '合理' ? 'bg-[#3498db]' : 'bg-[#e74c3c]'
+                      >
+                        {/* Selection Badge / Checkbox */}
+                        <div className="absolute top-3 left-3 z-10 bg-[#1e1e24] bg-opacity-75 p-1.5 rounded-lg border border-[#30363d]" onClick={e => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleSelectBike(p)}
+                            className="rounded accent-[#00adb5] h-4 w-4 cursor-pointer"
+                          />
+                        </div>
+
+                        {/* CP Label Badge */}
+                        <div className="absolute top-3 right-3 z-10">
+                          <span className={`px-2 py-1 rounded text-xs font-bold text-white shadow-md ${p.cp_label === '超值' ? 'bg-[#2ecc71]' : p.cp_label === '合理' ? 'bg-[#3498db]' : 'bg-[#e74c3c]'
                             }`}>{p.cp_label}</span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                        </div>
+
+                        {/* Image Preview */}
+                        <div className="relative h-44 w-full bg-[#1e1e24] overflow-hidden flex items-center justify-center border-b border-[#30363d]">
+                          {p.img_url ? (
+                            <img src={p.img_url} alt={p.title} className="h-full w-full object-cover transition-transform duration-300 hover:scale-105" />
+                          ) : (
+                            <span className="text-4xl text-[#555]">🏍️</span>
+                          )}
+                        </div>
+
+                        {/* Content */}
+                        <div className="p-4 flex-grow flex flex-col justify-between">
+                          <div>
+                            <div className="flex justify-between items-center text-xs text-[#b2bec3] mb-1">
+                              <span>{p.brand} · {p.displacement}cc</span>
+                              <span>{p.year} 年</span>
+                            </div>
+
+                            <h4 className="font-bold text-sm text-[#eeeeee] line-clamp-2 hover:text-[#58a6ff] mb-2 min-h-[40px]">
+                              <a href={p.url} target="_blank" onClick={e => e.stopPropagation()}>
+                                {p.title}
+                              </a>
+                            </h4>
+                          </div>
+
+                          <div className="space-y-2 mt-2">
+                            <div className="flex justify-between text-xs text-[#b2bec3]">
+                              <span>🛣️ 里程:</span>
+                              <span className="font-mono font-semibold text-[#eeeeee]">{intVal(p.mileage).toLocaleString()} km</span>
+                            </div>
+                            <div className="flex justify-between text-xs text-[#b2bec3]">
+                              <span>📍 門市:</span>
+                              <span className="text-[#eeeeee]">{p.location}</span>
+                            </div>
+
+                            <hr className="border-[#30363d] my-2" />
+
+                            <div className="flex justify-between items-end">
+                              <div>
+                                <span className="text-[10px] text-[#b2bec3] block">CP值指數</span>
+                                <span className="text-lg font-extrabold text-[#00adb5]">{p.cp_index.toFixed(2)}</span>
+                              </div>
+                              <div className="text-right">
+                                <span className="text-[10px] text-[#b2bec3] block">智能特價</span>
+                                <span className="text-lg font-extrabold text-[#e67e22]">NT$ {intVal(p.current_price).toLocaleString()}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -610,11 +738,10 @@ export default function Home() {
                   <button
                     key={i}
                     onClick={() => setSelectedBranch(branch)}
-                    className={`w-full text-left p-3 rounded-lg text-sm font-semibold transition-all ${
-                      selectedBranch.name === branch.name
+                    className={`w-full text-left p-3 rounded-lg text-sm font-semibold transition-all ${selectedBranch.name === branch.name
                         ? 'bg-[#00adb5] text-white shadow'
                         : 'hover:bg-[#121214] text-[#b2bec3]'
-                    }`}
+                      }`}
                   >
                     📍 {branch.name}
                   </button>
@@ -636,10 +763,11 @@ export default function Home() {
                 {/* Branch Inventory Table */}
                 <div>
                   <h4 className="text-sm font-bold text-[#eeeeee] mb-3">🚗 該店在庫車輛清單</h4>
-                  <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
+                  <div className="overflow-x-auto max-h-[350px] overflow-y-auto">
                     <table className="w-full text-xs text-left">
                       <thead>
                         <tr className="border-b border-[#30363d] text-[#b2bec3] bg-[#121214]">
+                          <th className="p-2">縮圖</th>
                           <th className="p-2">車款名稱</th>
                           <th className="p-2 text-center">年份</th>
                           <th className="p-2 text-right">里程 (km)</th>
@@ -656,16 +784,25 @@ export default function Home() {
                             return pLoc.includes(bShort);
                           })
                           .map((p, idx) => (
-                            <tr key={idx} className="border-b border-[#30363d] hover:bg-[#21262d]">
-                              <td className="p-2 font-semibold">{p.title}</td>
+                            <tr key={idx} className="border-b border-[#30363d] hover:bg-[#21262d] transition-all">
+                              <td className="p-2">
+                                {p.img_url ? (
+                                  <img src={p.img_url} alt={p.title} className="h-6 w-9 object-cover rounded border border-[#30363d]" />
+                                ) : (
+                                  <div className="h-6 w-9 bg-[#121214] rounded border border-[#30363d] flex items-center justify-center text-[8px] text-[#555]">🏍️</div>
+                                )}
+                              </td>
+                              <td className="p-2 font-semibold">
+                                <a href={p.url} target="_blank" className="hover:underline text-[#58a6ff]">{p.title}</a>
+                              </td>
                               <td className="p-2 text-center">{p.year}</td>
                               <td className="p-2 text-right">{intVal(p.mileage).toLocaleString()}</td>
-                              <td className="p-2 text-right text-[#e67e22]">{intVal(p.current_price).toLocaleString()}</td>
+                              <td className="p-2 text-right text-[#e67e22]">NT$ {intVal(p.current_price).toLocaleString()}</td>
                               <td className="p-2 text-center font-bold text-[#00adb5]">{p.cp_index.toFixed(2)}</td>
                               <td className="p-2 text-center">
-                                <button 
+                                <button
                                   onClick={() => exportAppointmentGuide(p)}
-                                  className="bg-[#27ae60] hover:bg-[#2ecc71] text-white px-2 py-1 rounded text-[10px] font-semibold"
+                                  className="bg-[#27ae60] hover:bg-[#2ecc71] text-white px-2 py-1 rounded text-[10px] font-semibold transition-all"
                                 >
                                   📝 匯出
                                 </button>
@@ -690,7 +827,7 @@ export default function Home() {
                   <h3 className="text-xs font-bold text-[#b2bec3] mb-2">二手機車售價分布直方圖</h3>
                   <img src={charts.histogram_url} alt="Price Histogram" className="max-w-full rounded-md shadow-md" />
                 </div>
-                
+
                 <div className="bg-[#121214] p-3 rounded-lg border border-[#30363d] text-center">
                   <h3 className="text-xs font-bold text-[#b2bec3] mb-2">里程數與售價關係散佈圖</h3>
                   <img src={charts.scatter_url} alt="Mileage Scatter Plot" className="max-w-full rounded-md shadow-md" />
@@ -714,7 +851,7 @@ export default function Home() {
       {showCompareModal && selectedBikes.length > 0 && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-70 backdrop-blur-sm">
           <div className="bg-[#1e1e24] rounded-xl border border-[#30363d] max-w-4xl w-full p-6 shadow-2xl relative">
-            <button 
+            <button
               onClick={() => setShowCompareModal(false)}
               className="absolute top-4 font-bold text-lg right-4 text-[#b2bec3] hover:text-[#eeeeee]"
             >
@@ -731,38 +868,46 @@ export default function Home() {
                 const isBestYear = bike.year === bestSpecs.maxYear;
 
                 return (
-                  <div key={index} className="bg-[#121214] p-4 rounded-xl border border-[#30363d] space-y-4">
-                    <h4 className="font-bold text-[#58a6ff] truncate text-sm">{bike.title}</h4>
+                  <div key={index} className="bg-[#121214] p-4 rounded-xl border border-[#30363d] space-y-4 hover:border-[#00adb5] transition-all duration-300">
+                    {bike.img_url ? (
+                      <img src={bike.img_url} alt={bike.title} className="h-28 w-full object-cover rounded-lg border border-[#30363d] mb-2" />
+                    ) : (
+                      <div className="h-28 w-full bg-[#1e1e24] rounded-lg border border-[#30363d] flex items-center justify-center text-2xl mb-2">🏍️</div>
+                    )}
+                    <h4 className="font-bold text-[#58a6ff] truncate text-sm" title={bike.title}>{bike.title}</h4>
                     <hr className="border-[#30363d]" />
                     <div className="space-y-2 text-xs">
-                      <div className={`p-2 rounded ${isBestPrice ? 'bg-[#27ae60] bg-opacity-20 border border-[#27ae60]' : ''}`}>
+                      <div className={`p-2 rounded transition-all ${isBestPrice ? 'bg-[#27ae60] bg-opacity-20 border border-[#27ae60]' : 'bg-[#1e1e24]'}`}>
                         💵 價格：<span className="font-bold text-[#e67e22]">NT$ {intVal(bike.current_price).toLocaleString()}</span> {isBestPrice && '🏆'}
                       </div>
-                      
-                      <div className={`p-2 rounded ${isBestMileage ? 'bg-[#27ae60] bg-opacity-20 border border-[#27ae60]' : ''}`}>
+
+                      <div className={`p-2 rounded transition-all ${isBestMileage ? 'bg-[#27ae60] bg-opacity-20 border border-[#27ae60]' : 'bg-[#1e1e24]'}`}>
                         🛣️ 里程：<span className="font-bold">{intVal(bike.mileage).toLocaleString()} km</span> {isBestMileage && '🏆'}
                       </div>
 
-                      <div className={`p-2 rounded ${isBestYear ? 'bg-[#27ae60] bg-opacity-20 border border-[#27ae60]' : ''}`}>
+                      <div className={`p-2 rounded transition-all ${isBestYear ? 'bg-[#27ae60] bg-opacity-20 border border-[#27ae60]' : 'bg-[#1e1e24]'}`}>
                         📅 年份：<span className="font-bold">{bike.year} 年</span> {isBestYear && '🏆'}
                       </div>
 
-                      <div className="p-2">
-                        🔥 CP值：<span className="font-bold text-[#00adb5]">{bike.cp_index.toFixed(2)} ({bike.cp_label})</span>
+                      <div className="p-2 flex justify-between">
+                        <span className="text-[#b2bec3]">🔥 CP值指數:</span>
+                        <span className="font-bold text-[#00adb5]">{bike.cp_index.toFixed(2)} ({bike.cp_label})</span>
                       </div>
 
-                      <div className="p-2 text-[#b2bec3]">
-                        📍 實體門市：<span>{bike.location}</span>
+                      <div className="p-2 flex justify-between border-t border-[#1e1e24]">
+                        <span className="text-[#b2bec3]">📍 實體門市:</span>
+                        <span className="text-[#eeeeee]">{bike.location}</span>
                       </div>
 
-                      <div className="p-2 text-[#b2bec3]">
-                        🏍️ 排氣量：<span>{bike.displacement} cc</span>
+                      <div className="p-2 flex justify-between">
+                        <span className="text-[#b2bec3]">🏍️ 排氣量:</span>
+                        <span className="text-[#eeeeee]">{bike.displacement} cc</span>
                       </div>
                     </div>
-                    
+
                     <button
                       onClick={() => exportAppointmentGuide(bike)}
-                      className="w-full bg-[#27ae60] hover:bg-[#2ecc71] text-white p-2 rounded-lg text-xs font-bold transition-all shadow"
+                      className="w-full bg-[#27ae60] hover:bg-[#2ecc71] text-white p-2 rounded-lg text-xs font-bold transition-all shadow-md"
                     >
                       📝 匯出此車預約看車規劃書
                     </button>
