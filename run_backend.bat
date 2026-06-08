@@ -38,9 +38,6 @@ echo Starting Uvicorn server on http://127.0.0.1:8000... >> "%LOG_FILE%"
 :: Runs server.py directly in CWD backend/ so reload works perfectly
 powershell -Command "& '%PY_CMD%' server.py 2>&1 | Tee-Object -FilePath '%LOG_FILE%' -Append"
 
-if not errorlevel 1 goto end
-echo.
-echo [ERROR] Failed to start backend server. See logs\backend_launch.log for details.
-echo [ERROR] Failed to start backend server. >> "%LOG_FILE%"
-pause
+echo Backend server stopped.
+echo Backend server stopped. >> "%LOG_FILE%"
 :end
