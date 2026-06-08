@@ -337,7 +337,17 @@ class MotorAnalysisApp:
             self.progress_bar['maximum'] = current_page
             
         self.progress_bar['value'] = current_page
-        self.progress_text.set(f"正在執行爬蟲中...\n({status_text} / {int(self.progress_bar['maximum'])} 頁)\n目前已取得 {scraped_count} 筆商品")
+        
+        # 計算百分比
+        max_val = self.progress_bar['maximum']
+        pct = int((current_page / max_val) * 100) if max_val > 0 else 0
+        pct = min(100, pct)
+        
+        self.progress_text.set(
+            f"正在執行爬蟲中...\n"
+            f"({status_text} / {int(max_val)} 頁 - {pct}%)\n"
+            f"目前已取得 {scraped_count} 筆商品"
+        )
 
     def on_crawl_success(self, result):
         self.polling_active = False
@@ -356,24 +366,47 @@ class MotorAnalysisApp:
 
     def load_data_and_charts(self):
         self.load_btn.configure(state=tk.DISABLED)
-        self.progress_text.set("正在獲取統計數據與影像分析...")
+        self.progress_bar['value'] = 0
+        self.progress_bar['maximum'] = 6
+        self.progress_text.set("正在與 API 伺服器通訊... (0%)")
         thread = threading.Thread(target=self.run_load_data)
         thread.daemon = True
         thread.start()
 
     def run_load_data(self):
         try:
+            # Step 1
+            self.root.after(0, self.update_load_progress, 0, "正在獲取商品清單... (0%)")
             products = self.client.get_products()
+            
+            # Step 2
+            self.root.after(0, self.update_load_progress, 1, "正在計算大數據統計資訊... (16%)")
             analysis = self.client.get_analysis()
+            
+            # Step 3
+            self.root.after(0, self.update_load_progress, 2, "正在產生市場圖表連結... (33%)")
             charts = self.client.get_charts()
             
+            # Step 4
+            self.root.after(0, self.update_load_progress, 3, "正在下載價格直方圖影像... (50%)")
             hist_bytes = self.client.download_chart_image(charts["histogram_url"])
+            
+            # Step 5
+            self.root.after(0, self.update_load_progress, 4, "正在下載折扣散佈圖影像... (66%)")
             scatter_bytes = self.client.download_chart_image(charts["scatter_url"])
+            
+            # Step 6
+            self.root.after(0, self.update_load_progress, 5, "正在下載熱門品牌圓餅圖影像... (83%)")
             pie_bytes = self.client.download_chart_image(charts["brand_pie_url"])
             
-            self.root.after(0, self.on_load_success, products, analysis, hist_bytes, scatter_bytes, pie_bytes)
+            self.root.after(0, self.update_load_progress, 6, "影像與數據下載完成，正在更新介面... (100%)")
+            self.root.after(50, self.on_load_success, products, analysis, hist_bytes, scatter_bytes, pie_bytes)
         except Exception as e:
             self.root.after(0, self.on_load_failed, str(e))
+
+    def update_load_progress(self, step_num, message):
+        self.progress_bar['value'] = step_num
+        self.progress_text.set(message)
 
     def on_load_success(self, products, analysis, hist_bytes, scatter_bytes, pie_bytes):
         self.load_btn.configure(state=tk.NORMAL)
