@@ -39,6 +39,41 @@ logging.basicConfig(level=logging.INFO)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
 
+# 新增 logs.txt 錯誤與異常寫入機制
+class ErrorFileHandler(logging.Handler):
+    def __init__(self, filename):
+        super().__init__(level=logging.ERROR)
+        self.filename = filename
+        
+    def emit(self, record):
+        try:
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            msg = self.format(record)
+            log_line = f"[{timestamp}] [BACKEND_ERROR] {msg}\n"
+            with open(self.filename, "a", encoding="utf-8") as f:
+                f.write(log_line)
+        except Exception:
+            pass
+
+if os.getenv("VERCEL") == "1":
+    LOGS_TXT_DIR = "/tmp/logs"
+else:
+    LOGS_TXT_DIR = os.path.join(PROJECT_ROOT, "logs")
+
+os.makedirs(LOGS_TXT_DIR, exist_ok=True)
+LOGS_TXT_PATH = os.path.join(LOGS_TXT_DIR, "logs.txt")
+
+# 確保 logs.txt 檔案在服務啟動時即被建立（即使目前沒有錯誤）
+try:
+    if not os.path.exists(LOGS_TXT_PATH):
+        with open(LOGS_TXT_PATH, "w", encoding="utf-8") as f:
+            f.write("")
+except Exception:
+    pass
+file_handler = ErrorFileHandler(LOGS_TXT_PATH)
+file_handler.setFormatter(logging.Formatter('%(name)s - %(levelname)s - %(message)s'))
+logger.addHandler(file_handler)
+
 # 支援 Vercel 唯讀環境下的靜態資源目錄
 if os.getenv("VERCEL") == "1":
     STATIC_DIR = "/tmp/static"
@@ -897,6 +932,35 @@ app.add_middleware(
 os.makedirs(STATIC_DIR, exist_ok=True)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
+class ClientLogError(BaseModel):
+    error: str
+    stack: Optional[str] = None
+    url: Optional[str] = None
+
+@app.post("/api/v1/log-error")
+def log_client_error(payload: ClientLogError):
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_msg = f"[{timestamp}] [FRONTEND_ERROR] {payload.error}\nStack: {payload.stack or 'N/A'}\nURL: {payload.url or 'N/A'}\n\n"
+    try:
+        with open(LOGS_TXT_PATH, "a", encoding="utf-8") as f:
+            f.write(log_msg)
+    except Exception as e:
+        logger.error(f"Failed to write client log: {e}")
+    return {"status": "logged"}
+
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    import traceback
+    error_msg = f"Unhandled exception on {request.url.path}: {str(exc)}\n{traceback.format_exc()}"
+    logger.error(error_msg)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"伺服器內部錯誤: {str(exc)}"}
+    )
+
 @app.get("/")
 def home():
     return {"status": "healthy", "swagger": "/docs"}
@@ -1000,14 +1064,29 @@ def list_products_endpoint(db: Session = Depends(get_db)):
 def get_analysis_endpoint(db: Session = Depends(get_db)):
     products = db.query(Product).all()
     if not products:
-        raise HTTPException(status_code=404, detail="無商品資料，請先執行爬蟲")
+        return {
+            "total_count": 0,
+            "avg_original_price": 0.0,
+            "avg_current_price": 0.0,
+            "avg_discount_rate": 0.0,
+            "max_discount_rate": 0.0,
+            "min_price": 0.0,
+            "max_price": 0.0,
+            "price_distribution": {},
+            "avg_mileage": 0.0,
+            "value_choices_count": 0
+        }
     return analyze_products(products)
 
 @app.post("/api/v1/analysis/charts", response_model=ChartResponse)
 def get_charts_endpoint(db: Session = Depends(get_db)):
     products = db.query(Product).all()
     if not products:
-        raise HTTPException(status_code=404, detail="無商品資料，無法繪圖")
+        return ChartResponse(
+            histogram_url="",
+            scatter_url="",
+            brand_pie_url=""
+        )
     charts = generate_charts(products)
     return ChartResponse(
         histogram_url=f"/static/charts/{charts['histogram']}",

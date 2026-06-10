@@ -157,6 +157,44 @@ export default function Home() {
   // Fetch API URL Helper (detect client/server)
   const apiBase = ''; // Vercel handles requests to /api/ on the same host
 
+  // Helper to log errors to backend logs.txt
+  const logErrorToBackend = async (err, context = "") => {
+    try {
+      await fetch('/api/v1/log-error', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          error: `${context ? context + ": " : ""}${err.message || err}`,
+          stack: err.stack || null,
+          url: window.location.href
+        })
+      });
+    } catch (e) {
+      console.error("Failed to log error to backend", e);
+    }
+  };
+
+  // Global frontend exception listener to log unhandled client-side bugs
+  useEffect(() => {
+    const handleGlobalError = (event) => {
+      const err = event.error || { message: event.message };
+      logErrorToBackend(err, "Global Window Error");
+    };
+
+    const handleUnhandledRejection = (event) => {
+      const err = event.reason || new Error("Unhandled Promise Rejection");
+      logErrorToBackend(err, "Unhandled Promise Rejection");
+    };
+
+    window.addEventListener('error', handleGlobalError);
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
+    return () => {
+      window.removeEventListener('error', handleGlobalError);
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+    };
+  }, []);
+
   useEffect(() => {
     loadData();
   }, []);
@@ -222,6 +260,7 @@ export default function Home() {
       await new Promise(resolve => setTimeout(resolve, 600));
     } catch (err) {
       setError(err.message);
+      logErrorToBackend(err, "loadData");
     } finally {
       setDataLoading(false);
       setDataLoadingProgress(0);
@@ -242,6 +281,7 @@ export default function Home() {
       }
     } catch (err) {
       setError(err.message);
+      logErrorToBackend(err, "startCrawl");
     } finally {
       setCrawling(false);
     }
@@ -1016,7 +1056,7 @@ export default function Home() {
         {activeTab === 'charts' && (
           <div className="bg-[#1e1e24] p-5 rounded-xl border border-[#30363d] shadow-lg space-y-6">
             <h2 className="text-lg font-bold text-[#00adb5] mb-4">📈 市場大數據統計與可視化圖表</h2>
-            {charts ? (
+            {charts && charts.histogram_url ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-[#121214] p-3 rounded-lg border border-[#30363d] text-center">
                   <h3 className="text-xs font-bold text-[#b2bec3] mb-2">二手機車售價分布直方圖</h3>
