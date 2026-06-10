@@ -339,7 +339,7 @@ def fetch_detail_mileage(url: str) -> float:
         logger.error(f"抓取里程數失敗 {url}: {e}")
     return 0.0
 
-def scrape_products(max_pages: Optional[int] = None, cached_items: Optional[Dict[str, float]] = None) -> List[Dict[str, Any]]:
+def scrape_products(max_pages: Optional[int] = None, cached_items: Optional[Dict[str, float]] = None, quick: bool = False) -> List[Dict[str, Any]]:
     """以 Requests + BeautifulSoup 爬取貳輪部品電商所有頁面的商品數據，並以多線程抓取新上架車輛的里程"""
     from bs4 import BeautifulSoup
     import time
@@ -515,7 +515,7 @@ def scrape_products(max_pages: Optional[int] = None, cached_items: Optional[Dict
             mileage = fetch_detail_mileage(url)
             products[idx]["mileage"] = mileage
             
-        with ThreadPoolExecutor(max_workers=10) as executor:
+        with ThreadPoolExecutor(max_workers=20 if quick else 10) as executor:
             futures = [executor.submit(worker, idx) for idx in to_fetch_indices]
             completed_count = 0
             for fut in futures:
@@ -966,10 +966,14 @@ def home():
     return {"status": "healthy", "swagger": "/docs"}
 
 @app.post("/api/v1/crawl", response_model=CrawlTriggerResponse)
-def trigger_crawl_endpoint(max_pages: Optional[int] = None, db: Session = Depends(get_db)):
+def trigger_crawl_endpoint(max_pages: Optional[int] = None, quick: bool = False, db: Session = Depends(get_db)):
+    if quick and max_pages is None:
+        max_pages = 2
+        
     # 初始化全局爬蟲狀態
     CRAWL_STATUS["is_running"] = True
     CRAWL_STATUS["current_page"] = 0
+    CRAWL_STATUS["total_pages"] = max_pages if max_pages else 16
     CRAWL_STATUS["scraped_count"] = 0
     CRAWL_STATUS["status"] = "正在載入緩存紀錄..."
     CRAWL_STATUS["message"] = ""
@@ -985,7 +989,7 @@ def trigger_crawl_endpoint(max_pages: Optional[int] = None, db: Session = Depend
             logger.warning(f"未能載入本地緩存 (可能是首次啟動或資料表為空): {cache_err}")
 
         # 直連同步 Requests 爬蟲 (不會阻塞 FastAPI 的背景執行緒池)
-        scraped_data = scrape_products(max_pages=max_pages, cached_items=cached_items)
+        scraped_data = scrape_products(max_pages=max_pages, cached_items=cached_items, quick=quick)
         if not scraped_data:
             raise Exception("未爬到商品資料")
             
