@@ -512,6 +512,7 @@ export default function Home() {
                   </div>
                 ))}
               </div>
+            )}
             {/* Model Analysis Section */}
             {products.length > 0 && (
               <div className="bg-[#1e1e24] p-5 rounded-xl border border-[#30363d] shadow-lg">
