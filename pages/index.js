@@ -39,6 +39,12 @@ export default function Home() {
   const [crawlStatus, setCrawlStatus] = useState(null);
   const [error, setError] = useState('');
 
+  // Mappings State
+  const [mappings, setMappings] = useState([]);
+  const [mappingKw, setMappingKw] = useState('');
+  const [editingRaw, setEditingRaw] = useState(null);
+  const [editingMapped, setEditingMapped] = useState('');
+
   // Data Loading States
   const [dataLoading, setDataLoading] = useState(false);
   const [dataLoadingProgress, setDataLoadingProgress] = useState(0);
@@ -100,7 +106,7 @@ export default function Home() {
     if (brandFilter !== '全部') {
       filteredForModels = products.filter(p => p.brand === brandFilter);
     }
-    const modelNames = filteredForModels.map(p => getModelName(p.title)).filter(Boolean);
+    const modelNames = filteredForModels.map(p => getModelName(p)).filter(Boolean);
     return ['全部', ...Array.from(new Set(modelNames))].sort((a, b) => a.localeCompare(b));
   };
 
@@ -111,7 +117,7 @@ export default function Home() {
     // Group products by model name
     const groups = {};
     products.forEach(p => {
-      const model = getModelName(p.title);
+      const model = getModelName(p);
       if (!groups[model]) {
         groups[model] = {
           model: model,
@@ -195,9 +201,53 @@ export default function Home() {
     };
   }, []);
 
+  const loadMappings = async () => {
+    try {
+      const resp = await fetch('/api/v1/mappings');
+      if (resp.ok) {
+        const data = await resp.json();
+        setMappings(data);
+      }
+    } catch (err) {
+      console.error("Failed to load mappings", err);
+    }
+  };
+
+  const handleSaveMapping = async (rawName) => {
+    try {
+      const resp = await fetch('/api/v1/mappings/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          raw_name: rawName,
+          mapped_name: editingMapped.trim()
+        })
+      });
+      if (resp.ok) {
+        setEditingRaw(null);
+        setEditingMapped('');
+        await loadMappings();
+        await loadData();
+      } else {
+        const errorData = await resp.json();
+        setError(errorData.detail || "無法更新對照設定");
+      }
+    } catch (err) {
+      setError(err.message);
+      logErrorToBackend(err, "handleSaveMapping");
+    }
+  };
+
   useEffect(() => {
     loadData();
+    loadMappings();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'mappings') {
+      loadMappings();
+    }
+  }, [activeTab]);
 
   const loadData = async () => {
     setError('');
@@ -327,7 +377,7 @@ export default function Home() {
   // Filters & Sorting logic
   const filteredProducts = products.filter(p => {
     if (brandFilter !== '全部' && p.brand !== brandFilter) return false;
-    if (modelFilter !== '全部' && getModelName(p.title) !== modelFilter) return false;
+    if (modelFilter !== '全部' && getModelName(p) !== modelFilter) return false;
     if (locationFilter !== '全部') {
       const bShort = cleanLocName(locationFilter);
       const pLoc = cleanLocName(p.location || '');
@@ -515,12 +565,13 @@ export default function Home() {
         )}
 
         {/* Tab Bar */}
-        <div className="flex border-b border-[#30363d] mb-6 gap-2">
+        <div className="flex border-b border-[#30363d] mb-6 gap-2 overflow-x-auto whitespace-nowrap">
           {[
             { id: 'dashboard', label: '📊 數據看板與推薦' },
             { id: 'search', label: '🔍 全台車源篩選對比' },
             { id: 'stores', label: '📍 實體門市尋車' },
-            { id: 'charts', label: '📈 市場統計圖表' }
+            { id: 'charts', label: '📈 市場統計圖表' },
+            { id: 'mappings', label: '🔀 車款合併對照表' }
           ].map(tab => (
             <button
               key={tab.id}
@@ -1119,6 +1170,128 @@ export default function Home() {
             )}
           </div>
         )}
+
+        {activeTab === 'mappings' && (
+          <div className="bg-[#1e1e24] p-5 rounded-xl border border-[#30363d] shadow-lg space-y-6">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div>
+                <h2 className="text-lg font-bold text-[#00adb5] mb-1">🔀 機車車款名稱合併對照表</h2>
+                <p className="text-xs text-[#b2bec3]">把同車款但不同名的商品（如附帶門市、年份、配備規格等字尾字詞的商品）合併為統一車款。合併後可立即更新 CP 看板、統計圖表以及報表。</p>
+              </div>
+              
+              {/* 搜尋過濾 */}
+              <div className="w-full md:w-64">
+                <input
+                  type="text"
+                  placeholder="搜尋對照規則 (例如 VIVA)..."
+                  value={mappingKw}
+                  onChange={(e) => setMappingKw(e.target.value)}
+                  className="w-full bg-[#121214] text-[#eeeeee] border border-[#30363d] rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-[#00adb5]"
+                />
+              </div>
+            </div>
+
+            <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+              <table className="w-full text-xs text-left">
+                <thead>
+                  <tr className="border-b border-[#30363d] text-[#b2bec3] bg-[#121214]">
+                    <th className="p-3 w-1/2">原始車款名稱 (系統自清理後)</th>
+                    <th className="p-3 w-1/3">合併後車款名稱 (可用於篩選與統計)</th>
+                    <th className="p-3 w-1/6 text-center">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {mappings.length === 0 ? (
+                    <tr>
+                      <td colSpan="3" className="p-6 text-center text-[#b2bec3]">無任何對照規則。請確認已執行爬蟲以自動生成對照規則。</td>
+                    </tr>
+                  ) : (
+                    mappings
+                      .filter(m => {
+                        if (!mappingKw) return true;
+                        return m.raw_name.toLowerCase().includes(mappingKw.toLowerCase()) || 
+                               m.mapped_name.toLowerCase().includes(mappingKw.toLowerCase());
+                      })
+                      .map((m, idx) => {
+                        const isEditing = editingRaw === m.raw_name;
+                        
+                        // 獲取所有不重複的現有對照後車款名稱，用作快速合併的候選詞
+                        const distinctMappedNames = Array.from(new Set(mappings.map(item => item.mapped_name)))
+                          .filter(name => name !== m.mapped_name)
+                          .sort((a, b) => a.localeCompare(b));
+
+                        return (
+                          <tr key={idx} className="border-b border-[#30363d] hover:bg-[#21262d] transition-all">
+                            <td className="p-3 font-medium text-[#eeeeee]">{m.raw_name}</td>
+                            <td className="p-3">
+                              {isEditing ? (
+                                <div className="space-y-2">
+                                  <input
+                                    type="text"
+                                    value={editingMapped}
+                                    onChange={(e) => setEditingMapped(e.target.value)}
+                                    className="w-full bg-[#1e1e24] text-white border border-[#00adb5] rounded px-2 py-1 focus:outline-none"
+                                  />
+                                  {distinctMappedNames.length > 0 && (
+                                    <div className="flex flex-wrap gap-1 items-center">
+                                      <span className="text-[10px] text-[#b2bec3]">快速合併到現有車款：</span>
+                                      {distinctMappedNames.slice(0, 8).map((name, i) => (
+                                        <button
+                                          key={i}
+                                          type="button"
+                                          onClick={() => setEditingMapped(name)}
+                                          className="bg-[#121214] hover:bg-[#00adb5] hover:text-white text-[10px] text-[#b2bec3] px-2 py-0.5 rounded transition-all border border-[#30363d]"
+                                        >
+                                          {name}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-[#00adb5] font-semibold">{m.mapped_name}</span>
+                              )}
+                            </td>
+                            <td className="p-3 text-center">
+                              {isEditing ? (
+                                <div className="flex justify-center gap-2">
+                                  <button
+                                    onClick={() => handleSaveMapping(m.raw_name)}
+                                    className="bg-[#27ae60] hover:bg-[#2ecc71] text-white px-2 py-1 rounded font-bold transition-all text-[11px]"
+                                  >
+                                    儲存
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setEditingRaw(null);
+                                      setEditingMapped('');
+                                    }}
+                                    className="bg-[#e74c3c] hover:bg-[#c0392b] text-white px-2 py-1 rounded font-bold transition-all text-[11px]"
+                                  >
+                                    取消
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    setEditingRaw(m.raw_name);
+                                    setEditingMapped(m.mapped_name);
+                                  }}
+                                  className="bg-[#2980b9] hover:bg-[#3498db] text-white px-2 py-1 rounded font-bold transition-all text-[11px]"
+                                >
+                                  ✏️ 編輯對照
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Specifications Comparison Modal */}
@@ -1261,9 +1434,14 @@ function intVal(val) {
   return Math.round(Number(val));
 }
 
-function getModelName(title) {
-  if (!title) return "";
-  let clean = title;
+function getModelName(pOrTitle) {
+  if (!pOrTitle) return "";
+  if (typeof pOrTitle === 'object') {
+    if (pOrTitle.model_name) return pOrTitle.model_name;
+    pOrTitle = pOrTitle.title;
+  }
+  if (!pOrTitle) return "";
+  let clean = pOrTitle;
   // Remove branch e.g. 【新北樹林店】
   clean = clean.replace(/[【\[].*?[】\]]/g, "");
   // Remove year e.g. 2019

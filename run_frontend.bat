@@ -18,7 +18,9 @@ exit /b 1
 :has_req
 
 set "PY_CMD=python"
-if exist "%USERPROFILE%\AppData\Local\Programs\Python\Python311\python.exe" (
+if exist "%USERPROFILE%\AppData\Local\Programs\Python\Python313\python.exe" (
+    set "PY_CMD=%USERPROFILE%\AppData\Local\Programs\Python\Python313\python.exe"
+) else if exist "%USERPROFILE%\AppData\Local\Programs\Python\Python311\python.exe" (
     set "PY_CMD=%USERPROFILE%\AppData\Local\Programs\Python\Python311\python.exe"
 ) else if exist "%USERPROFILE%\AppData\Local\Programs\Python\Python312\python.exe" (
     set "PY_CMD=%USERPROFILE%\AppData\Local\Programs\Python\Python312\python.exe"
