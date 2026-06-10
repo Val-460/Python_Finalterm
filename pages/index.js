@@ -1,807 +1,934 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Head from 'next/head'
 
+const BRANCHES = [
+  { name: "新北中和店", address: "新北市中和區景平路 159 號", phone: "02-2242-2321", hours: "10:00 - 21:00", line: "https://line.me/ti/p/2motor_zhonghe" },
+  { name: "新北樹林店", address: "新北市樹林區中正路 410 號", phone: "02-2688-5522", hours: "10:00 - 21:00", line: "https://line.me/ti/p/2motor_shulin" },
+  { name: "台北大同店", address: "台北市大同區延平北路三段 100 號", phone: "02-2599-1122", hours: "10:00 - 21:00", line: "https://line.me/ti/p/2motor_datong" },
+  { name: "新北板橋店", address: "新北市板橋區文化路二段 320 號", phone: "02-2250-9988", hours: "10:00 - 21:00", line: "https://line.me/ti/p/2motor_banqiao" },
+  { name: "新北三重店", address: "新北市三重區重新路四段 80 號", phone: "02-2970-7766", hours: "10:00 - 21:00", line: "https://line.me/ti/p/2motor_sanchong" },
+  { name: "桃園中壢店", address: "桃園市中壢區延平路 200 號", phone: "03-425-3344", hours: "10:00 - 21:00", line: "https://line.me/ti/p/2motor_zhongli" },
+  { name: "新竹中華店", address: "新竹市東區中華路二段 500 號", phone: "03-522-8877", hours: "10:00 - 21:00", line: "https://line.me/ti/p/2motor_hsinchu" },
+  { name: "台中崇德店", address: "台中市北屯區崇德路二段 300 號", phone: "04-2244-5566", hours: "10:00 - 21:00", line: "https://line.me/ti/p/2motor_chongde" },
+  { name: "台中一中店", address: "台中市北區三民路三段 250 號", phone: "04-2225-8899", hours: "10:00 - 21:00", line: "https://line.me/ti/p/2motor_yizhong" },
+  { name: "彰化金馬店", address: "彰化市金馬路二段 600 號", phone: "04-722-3344", hours: "10:00 - 21:00", line: "https://line.me/ti/p/2motor_changhua" },
+  { name: "台南公園店", address: "台南市北區公園路 800 號", phone: "06-251-2233", hours: "10:00 - 21:00", line: "https://line.me/ti/p/2motor_tainan" },
+  { name: "高雄三民店", address: "高雄市三民區九如一路 400 號", phone: "07-380-5566", hours: "10:00 - 21:00", line: "https://line.me/ti/p/2motor_kaohsiung" },
+  { name: "高雄鳳山店", address: "高雄市鳳山區光遠路 100 號", phone: "07-740-8899", hours: "10:00 - 21:00", line: "https://line.me/ti/p/2motor_fengshan" },
+  { name: "宜蘭羅東店", address: "宜蘭縣羅東鎮純精路二段 150 號", phone: "03-955-6677", hours: "10:00 - 21:00", line: "https://line.me/ti/p/2motor_luodong" },
+  { name: "花蓮中山店", address: "花蓮縣花蓮市中山路 700 號", phone: "03-833-2211", hours: "10:00 - 21:00", line: "https://line.me/ti/p/2motor_hualien" }
+];
+
+function cleanLocName(name) {
+  if (!name) return "";
+  let clean = name;
+  const cities = ["新北", "台北", "桃園", "新竹", "台中", "彰化", "台南", "高雄", "宜蘭", "花蓮"];
+  cities.forEach(city => {
+    clean = clean.replace(city, "");
+  });
+  return clean.replace("店", "").strip ? clean.replace("店", "").trim() : clean.replace("店", "").trim();
+}
+
 export default function Home() {
-  const [keywords, setKeywords] = useState('')
-  const [maxPages, setMaxPages] = useState(5)
-  const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState(null)
-  const [selectedModel, setSelectedModel] = useState('')
-  const [models, setModels] = useState([])
-  const [parsedRows, setParsedRows] = useState([])
-  const [parsedHeaders, setParsedHeaders] = useState([])
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [viewMode, setViewMode] = useState('grid');
+  const [products, setProducts] = useState([]);
+  const [analysis, setAnalysis] = useState(null);
+  const [charts, setCharts] = useState(null);
+  const [crawling, setCrawling] = useState(false);
+  const [crawlStatus, setCrawlStatus] = useState(null);
+  const [error, setError] = useState('');
 
-  function parseTitleMeta(title) {
-    const meta = { store: '', year: '', brand: '', model: '', itemId: '' }
-    if (!title || typeof title !== 'string') return meta
-    let text = title.trim()
+  // Filter States
+  const [brandFilter, setBrandFilter] = useState('全部');
+  const [locationFilter, setLocationFilter] = useState('全部');
+  const [kwFilter, setKwFilter] = useState('');
+  const [priceMaxFilter, setPriceMaxFilter] = useState('');
+  const [mileMaxFilter, setMileMaxFilter] = useState('');
 
-    const storeMatch = text.match(/^【([^】]+)】\s*/)
-    if (storeMatch) {
-      meta.store = storeMatch[1].trim()
-      text = text.slice(storeMatch[0].length).trim()
-    }
+  // Selection & Compare
+  const [selectedBikes, setSelectedBikes] = useState([]);
+  const [showCompareModal, setShowCompareModal] = useState(false);
 
-    const idMatch = text.match(/#\s*(\d+)\s*$/)
-    if (idMatch) {
-      meta.itemId = idMatch[1]
-      text = text.slice(0, idMatch.index).trim()
-    }
+  // Store tab branch
+  const [selectedBranch, setSelectedBranch] = useState(BRANCHES[0]);
 
-    const yearMatch = text.match(/^(\d{4})\s+/)
-    if (yearMatch) {
-      meta.year = yearMatch[1]
-      text = text.slice(yearMatch[0].length).trim()
-    }
+  // Sorting
+  const [sortField, setSortField] = useState('id');
+  const [sortAsc, setSortAsc] = useState(true);
 
-    const parts = text.split(/\s+/).filter(Boolean)
-    if (parts.length > 1) {
-      meta.brand = parts[0]
-      meta.model = parts.slice(1).join(' ')
-    } else {
-      meta.model = text
-    }
+  // Fetch API URL Helper (detect client/server)
+  const apiBase = ''; // Vercel handles requests to /api/ on the same host
 
-    return meta
-  }
+  useEffect(() => {
+    loadData();
+  }, []);
 
-  async function submit(event) {
-    event.preventDefault()
-    setLoading(true)
-    setResult(null)
-    setSelectedModel('')
-    setModels([])
-    setParsedRows([])
-    setParsedHeaders([])
-
+  const loadData = async () => {
+    setError('');
     try {
-      const resp = await fetch('/api/scrape', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keywords, max_pages: Number(maxPages) })
-      })
+      const pResp = await fetch('/api/v1/products');
+      if (!pResp.ok) throw new Error("尚未爬取商品資料，請點擊上方按鈕執行大數據爬蟲");
+      const pData = await pResp.json();
+      setProducts(pData);
 
-      const text = await resp.text()
-      try {
-        const data = JSON.parse(text)
-        if (!resp.ok) {
-          setResult({ error: `API 錯誤 (${resp.status}): ${data.error || text}`, logs: data.logs })
-        } else {
-          const parsed = parseCSV(data.csv)
-          const titleIndex = parsed.headers.indexOf('title')
-          const modelIndex = parsed.headers.indexOf('model')
-          const brandIndex = parsed.headers.indexOf('brand')
-          const itemIdIndex = parsed.headers.indexOf('item_id')
-          const priceIndex = parsed.headers.indexOf('price')
-          const mileageIndex = parsed.headers.indexOf('mileage')
-          const yearIndex = parsed.headers.indexOf('year')
-          const ccIndex = parsed.headers.indexOf('cc')
-          const storeIndex = parsed.headers.indexOf('store')
-          const urlIndex = parsed.headers.indexOf('url')
-
-          const rows = parsed.rows.map(row => {
-            const title = titleIndex >= 0 ? row[titleIndex] : ''
-            const meta = parseTitleMeta(title)
-            const modelValue = modelIndex >= 0 && row[modelIndex] ? row[modelIndex] : meta.model
-            return {
-              row,
-              title,
-              store: storeIndex >= 0 && row[storeIndex] ? row[storeIndex] : meta.store,
-              year: yearIndex >= 0 && row[yearIndex] ? row[yearIndex] : meta.year,
-              brand: brandIndex >= 0 && row[brandIndex] ? row[brandIndex] : meta.brand,
-              model: modelValue,
-              itemId: itemIdIndex >= 0 && row[itemIdIndex] ? row[itemIdIndex] : meta.itemId,
-              price: priceIndex >= 0 ? parseInt(row[priceIndex]) || null : null,
-              mileage: mileageIndex >= 0 ? parseInt(row[mileageIndex]) || null : null,
-              cc: ccIndex >= 0 ? parseInt(row[ccIndex]) || null : null,
-              url: urlIndex >= 0 ? row[urlIndex] : '',
-            }
-          })
-
-          const uniqueModels = [...new Set(rows.map(item => item.model).filter(Boolean))]
-            .sort()
-            .slice(0, 100)
-
-          setModels(uniqueModels)
-          setParsedHeaders(parsed.headers)
-          setParsedRows(rows)
-          setResult(data)
-        }
-      } catch (jsonError) {
-        setResult({ error: `無效 JSON 回應 (${resp.status}): ${text}` })
+      const aResp = await fetch('/api/v1/analysis');
+      if (aResp.ok) {
+        const aData = await aResp.json();
+        setAnalysis(aData);
       }
-    } catch (error) {
-      setResult({ error: `請求失敗: ${String(error)}` })
-    } finally {
-      setLoading(false)
+
+      const cResp = await fetch('/api/v1/analysis/charts', { method: 'POST' });
+      if (cResp.ok) {
+        const cData = await cResp.json();
+        setCharts(cData);
+      }
+    } catch (err) {
+      setError(err.message);
     }
-  }
+  };
 
-  function download(filename, content, mime = 'text/plain') {
-    const blob = new Blob([content], { type: mime })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = filename
-    a.click()
-    URL.revokeObjectURL(url)
-  }
-
-  function parseCSV(csv) {
-    const normalized = csv.replace(/\r\n?/g, '\n')
-    const rows = []
-    let current = ''
-    let row = []
-    let inQuotes = false
-
-    for (let i = 0; i < normalized.length; i += 1) {
-      const char = normalized[i]
-      if (char === '"') {
-        if (inQuotes && normalized[i + 1] === '"') {
-          current += '"'
-          i += 1
-        } else {
-          inQuotes = !inQuotes
-        }
-      } else if (char === ',' && !inQuotes) {
-        row.push(current)
-        current = ''
-      } else if (char === '\n' && !inQuotes) {
-        row.push(current)
-        rows.push(row)
-        row = []
-        current = ''
+  const startCrawl = async () => {
+    setCrawling(true);
+    setError('');
+    try {
+      const resp = await fetch('/api/v1/crawl', { method: 'POST' });
+      const data = await resp.json();
+      if (resp.ok && data.status === 'success') {
+        loadData();
       } else {
-        current += char
+        throw new Error(data.message || '爬蟲失敗');
       }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCrawling(false);
     }
+  };
 
-    if (current !== '' || row.length > 0) {
-      row.push(current)
-      rows.push(row)
+  // Poll status during crawl
+  useEffect(() => {
+    let timer;
+    if (crawling) {
+      timer = setInterval(async () => {
+        try {
+          const resp = await fetch('/api/v1/crawl/status');
+          if (resp.ok) {
+            const data = await resp.json();
+            setCrawlStatus(data);
+            if (!data.is_running) {
+              setCrawling(false);
+              loadData();
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
+      }, 1000);
+    } else {
+      setCrawlStatus(null);
     }
+    return () => clearInterval(timer);
+  }, [crawling]);
 
-    if (rows.length === 0) return { headers: [], rows: [] }
-    const headers = rows[0].map(h => h.trim())
-    const dataRows = rows.slice(1).map(r => r.map(cell => cell.trim()))
-    return { headers, rows: dataRows }
-  }
+  // Brands extracted dynamically
+  const brands = products.length > 0
+    ? ['全部', ...Array.from(new Set(products.map(p => p.brand).filter(Boolean)))]
+    : ['全部'];
 
-  function getFilteredData() {
-    if (!parsedRows.length || !selectedModel) {
-      return { headers: parsedHeaders, rows: [], stats: {}, storeStats: [] }
-    }
-
-    const filtered = parsedRows.filter(item => item.model === selectedModel)
-    const stats = {
-      count: filtered.length,
-      avgPrice: 0,
-      minPrice: 0,
-      maxPrice: 0,
-      avgMileage: 0,
-      minMileage: 0,
-      maxMileage: 0,
-      avgYear: 0,
-      minYear: 0,
-      maxYear: 0,
-      avgCC: 0,
-    }
-
-    const storeMap = {}
-    const prices = []
-    const mileages = []
-    const years = []
-    const ccs = []
-
-    filtered.forEach(item => {
-      if (item.price > 0) prices.push(item.price)
-      if (item.mileage > 0) mileages.push(item.mileage)
-      if (item.year && !Number.isNaN(Number(item.year))) years.push(Number(item.year))
-      if (item.cc > 0) ccs.push(item.cc)
-
-      const storeName = item.store || '未知販售地'
-      if (!storeMap[storeName]) {
-        storeMap[storeName] = { count: 0, prices: [], mileages: [], minPrice: Infinity, maxPrice: 0 }
+  // Handle Row Selection for Comparison
+  const handleSelectBike = (bike) => {
+    if (selectedBikes.find(b => b.id === bike.id)) {
+      setSelectedBikes(selectedBikes.filter(b => b.id !== bike.id));
+    } else {
+      if (selectedBikes.length >= 3) {
+        alert("最多只能選取 3 台車進行橫向對比！");
+        return;
       }
-      const storeStat = storeMap[storeName]
-      storeStat.count += 1
-      if (item.price > 0) {
-        storeStat.prices.push(item.price)
-        storeStat.minPrice = Math.min(storeStat.minPrice, item.price)
-        storeStat.maxPrice = Math.max(storeStat.maxPrice, item.price)
-      }
-      if (item.mileage > 0) {
-        storeStat.mileages.push(item.mileage)
-      }
-    })
-
-    if (prices.length > 0) {
-      stats.avgPrice = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length)
-      stats.minPrice = Math.min(...prices)
-      stats.maxPrice = Math.max(...prices)
+      setSelectedBikes([...selectedBikes, bike]);
     }
-    if (mileages.length > 0) {
-      stats.avgMileage = Math.round(mileages.reduce((a, b) => a + b, 0) / mileages.length)
-      stats.minMileage = Math.min(...mileages)
-      stats.maxMileage = Math.max(...mileages)
-    }
-    if (years.length > 0) {
-      stats.avgYear = Math.round(years.reduce((a, b) => a + b, 0) / years.length)
-      stats.minYear = Math.min(...years)
-      stats.maxYear = Math.max(...years)
-    }
-    if (ccs.length > 0) {
-      stats.avgCC = Math.round(ccs.reduce((a, b) => a + b, 0) / ccs.length)
-    }
+  };
 
-    const storeStats = Object.keys(storeMap).map(storeName => {
-      const storeStat = storeMap[storeName]
-      return {
-        store: storeName,
-        count: storeStat.count,
-        avgPrice: storeStat.prices.length > 0 ? Math.round(storeStat.prices.reduce((a, b) => a + b, 0) / storeStat.prices.length) : 0,
-        minPrice: storeStat.minPrice === Infinity ? 0 : storeStat.minPrice,
-        maxPrice: storeStat.maxPrice,
-        avgMileage: storeStat.mileages.length > 0 ? Math.round(storeStat.mileages.reduce((a, b) => a + b, 0) / storeStat.mileages.length) : 0,
-      }
-    }).sort((a, b) => b.count - a.count)
+  // Filters & Sorting logic
+  const filteredProducts = products.filter(p => {
+    if (brandFilter !== '全部' && p.brand !== brandFilter) return false;
+    if (locationFilter !== '全部') {
+      const bShort = cleanLocName(locationFilter);
+      const pLoc = cleanLocName(p.location || '');
+      if (!pLoc.includes(bShort)) return false;
+    }
+    if (kwFilter && !p.title.toLowerCase().includes(kwFilter.toLowerCase())) return false;
+    if (priceMaxFilter && p.current_price > Number(priceMaxFilter) * 10000) return false;
+    if (mileMaxFilter && p.mileage > Number(mileMaxFilter)) return false;
+    return true;
+  });
 
-    return { headers: parsedHeaders, rows: filtered, stats, storeStats }
-  }
+  const sortedProducts = [...filteredProducts].sort((a, b) => {
+    let valA = a[sortField];
+    let valB = b[sortField];
+    if (valA === undefined) return 1;
+    if (valB === undefined) return -1;
 
-  const filteredData = getFilteredData()
+    if (typeof valA === 'string') {
+      return sortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+    }
+    return sortAsc ? valA - valB : valB - valA;
+  });
+
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortAsc(!sortAsc);
+    } else {
+      setSortField(field);
+      setSortAsc(true);
+    }
+  };
+
+  // Best specs for highlighting in comparison
+  const getBestSpecs = () => {
+    if (selectedBikes.length === 0) return {};
+    const prices = selectedBikes.map(b => b.current_price);
+    const mileages = selectedBikes.map(b => b.mileage);
+    const years = selectedBikes.map(b => b.year);
+
+    return {
+      minPrice: Math.min(...prices),
+      minMileage: Math.min(...mileages),
+      maxYear: Math.max(...years)
+    };
+  };
+
+  const bestSpecs = getBestSpecs();
+
+  // Export Planner
+  const exportAppointmentGuide = (bike) => {
+    if (!bike) return;
+    const now = new Date();
+    const nowStr = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}_${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}`;
+
+    const branchName = bike.location || "未指定分店";
+    const branchInfo = BRANCHES.find(b => cleanLocName(b.name) === cleanLocName(branchName)) || BRANCHES[0];
+
+    const mdContent = `# 貳輪嶼二手機車預約看車規劃書 (${bike.title})
+
+## 1. 預約車輛詳細資訊
+
+*   **車輛名稱**：${bike.title}
+*   **參考網址**：${bike.url}
+*   **出廠年份**：${bike.year} 年
+*   **引擎排氣量**：${bike.displacement} cc
+*   **行駛里程數**：${bike.mileage.toLocaleString()} 公里
+*   **原電商售價**：NT$ ${bike.original_price.toLocaleString()} 元
+*   **智能特價**：NT$ ${bike.current_price.toLocaleString()} 元 (省下 NT$ ${(bike.original_price - bike.current_price).toLocaleString()} 元)
+*   **CP 值指數**：${bike.cp_index} (${bike.cp_label})
+
+---
+
+## 2. 實體看車門市資訊 (O2O 導航指引)
+
+*   **看車門市**：${branchInfo.name}
+*   **門市地址**：${branchInfo.address}
+*   **門市電話**：${branchInfo.phone}
+*   **營業時間**：${branchInfo.hours}
+*   **LINE 聯絡**：${branchInfo.line}
+
+---
+
+## 3. 二手機車現場驗車 10 大防呆檢查表
+
+為了確保您現場看車不踩雷，請嚴格核對以下 10 大項目：
+
+| 檢查項目 | 檢查要點與步驟 | 現場核對結果 (Pass/Fail) |
+| :--- | :--- | :---: |
+| **1. 冷車啟動檢查** | 務必請店家在您到達前**不要熱車**。觸摸排氣管確認為冷態。按下發動鈕，觀察能否在 2-3 秒內一觸即發，且無異音。 | [ ] 正常 / [ ] 異常 |
+| **2. 引擎漏油痕跡** | 趴下檢查引擎底部、墊片處、避震器油封處，確認無新鮮油污滲漏，地表無油滴。 | [ ] 正常 / [ ] 異常 |
+| **3. 前後輪胎磨損** | 檢查輪胎胎紋深度。若低於 1.6mm (或磨損至指示點) 現場要求更換。確認輪胎製造日期是否過舊。 | [ ] 正常 / [ ] 異常 |
+| **4. 避震與回彈測試** | 用力下壓前叉與後避震，感受阻尼是否過軟。確認避震器內管乾淨無油漬，沒有因老化漏油。 | [ ] 正常 / [ ] 異常 |
+| **5. 龍頭與車架轉向** | 跨騎上車，原地左打右打龍頭。確認手感順暢無卡滯感。煞車拉桿是否鬆動、歪斜。 | [ ] 正常 / [ ] 異常 |
+| **6. 煞車制動檢查** | 檢查前後煞車碟盤磨損深度、煞車皮厚度是否偏薄。煞車總泵油量是否充足。 | [ ] 正常 / [ ] 異常 |
+| **7. 排氣檢驗與煙色** | 發動後用手背在排氣口後方感受氣流，有無藍煙(吃機油)或濃黑煙(燃燒不完全)，正常應為無色無味或白煙。 | [ ] 正常 / [ ] 異常 |
+| **8. 車架有無溶接痕** | 拆開馬桶(車廂)或骨架處，確認無扭曲變形、防鏽漆剝落或二次焊接痕跡(防範重大事故車)。 | [ ] 正常 / [ ] 異常 |
+| **9. 行照產權與車號** | 核對行照的**車身號碼/引擎號碼**與車輛實體鋼印是否完全一致。確認年份與里程是否跟網路上有大幅落差。 | [ ] 正常 / [ ] 異常 |
+| **10. 保固責任與條款** | 詢問實體保固期(如引擎、保固範圍)，並確認合約中是否有非事故車、非泡水車與里程保證。 | [ ] 正常 / [ ] 異常 |
+
+> **⚠️ 注意事項：**
+> 二手機車買賣合約請務必使用中華民國「二手車買賣定型化契約」，凡是口頭承諾的保固與送配件，請全數要求白紙黑字寫入合約備註欄內，以保障自身權益。
+`;
+
+    const blob = new Blob([mdContent], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `預約看車規劃書_${bike.title.replace(/\s+/g, '_')}_${nowStr}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
-    <>
+    <div className="min-h-screen bg-[#121214] text-[#eeeeee] font-sans antialiased">
       <Head>
-        <title>貳輪嶼二手機車數據分析系統</title>
-        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+        <title>🏍️ 二手機車 CP 值智能選購與全台尋車導航系統</title>
+        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet" />
       </Head>
 
-      <style dangerouslySetInnerHTML={{ __html: `
-        body {
-          background: radial-gradient(circle at top, #0f172a, #020617);
-          color: #f1f5f9;
-          font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-          margin: 0;
-          padding: 0;
-          min-height: 100vh;
-        }
-
-        .dashboard-container {
-          max-width: 1300px;
-          margin: 0 auto;
-          padding: 40px 20px;
-        }
-
-        .header-panel {
-          text-align: center;
-          margin-bottom: 40px;
-        }
-
-        .title-gradient {
-          background: linear-gradient(135deg, #38bdf8, #818cf8);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          font-weight: 700;
-          font-size: 2.6rem;
-          margin: 0 0 10px 0;
-          letter-spacing: -0.5px;
-        }
-
-        .subtitle {
-          color: #94a3b8;
-          font-size: 1.1rem;
-          margin: 0;
-        }
-
-        .glass-card {
-          background: rgba(15, 23, 42, 0.6);
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          border-radius: 16px;
-          padding: 24px;
-          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-          margin-bottom: 30px;
-        }
-
-        .glass-card h2, .glass-card h3 {
-          margin-top: 0;
-          font-weight: 600;
-          color: #f8fafc;
-        }
-
-        .form-grid {
-          display: grid;
-          grid-template-columns: 1fr 120px auto;
-          gap: 16px;
-          align-items: flex-end;
-        }
-
-        @media (max-width: 768px) {
-          .form-grid {
-            grid-template-columns: 1fr;
-          }
-        }
-
-        .form-group {
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-        }
-
-        .form-group label {
-          font-size: 0.9rem;
-          font-weight: 500;
-          color: #94a3b8;
-        }
-
-        .input-field {
-          background: rgba(30, 41, 59, 0.7);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          color: #fff;
-          border-radius: 8px;
-          padding: 12px;
-          font-size: 1rem;
-          transition: all 0.2s ease;
-        }
-
-        .input-field:focus {
-          outline: none;
-          border-color: #38bdf8;
-          box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
-        }
-
-        .primary-btn {
-          background: linear-gradient(135deg, #0284c7, #4f46e5);
-          color: #fff;
-          border: none;
-          border-radius: 8px;
-          padding: 14px 28px;
-          font-size: 1rem;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.3s ease;
-          box-shadow: 0 4px 15px rgba(79, 70, 229, 0.3);
-          height: 48px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .primary-btn:hover:not(:disabled) {
-          transform: translateY(-2px);
-          box-shadow: 0 6px 20px rgba(79, 70, 229, 0.5);
-        }
-
-        .primary-btn:disabled {
-          background: #334155;
-          color: #94a3b8;
-          cursor: not-allowed;
-          box-shadow: none;
-        }
-
-        .sec-btn {
-          background: rgba(30, 41, 59, 0.8);
-          color: #f1f5f9;
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 8px;
-          padding: 10px 18px;
-          font-size: 0.9rem;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-        }
-
-        .sec-btn:hover {
-          background: rgba(51, 65, 85, 0.8);
-          border-color: rgba(255, 255, 255, 0.2);
-        }
-
-        .excel-btn {
-          background: rgba(31, 127, 32, 0.2);
-          color: #4ade80;
-          border: 1px solid rgba(74, 222, 128, 0.3);
-        }
-
-        .excel-btn:hover {
-          background: rgba(31, 127, 32, 0.4);
-          border-color: rgba(74, 222, 128, 0.5);
-        }
-
-        .stats-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-          gap: 16px;
-          margin-bottom: 24px;
-        }
-
-        .stat-item {
-          background: rgba(30, 41, 59, 0.4);
-          border: 1px solid rgba(255, 255, 255, 0.05);
-          border-radius: 12px;
-          padding: 16px;
-          text-align: center;
-        }
-
-        .stat-val {
-          font-size: 1.8rem;
-          font-weight: 700;
-          color: #38bdf8;
-          margin-top: 4px;
-        }
-
-        .stat-val-purple {
-          color: #c084fc;
-        }
-
-        .stat-val-green {
-          color: #4ade80;
-        }
-
-        .stat-val-orange {
-          color: #fb923c;
-        }
-
-        .stat-label {
-          font-size: 0.85rem;
-          color: #94a3b8;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-        }
-
-        .table-wrapper {
-          overflow-x: auto;
-          border-radius: 12px;
-          border: 1px solid rgba(255, 255, 255, 0.05);
-          background: rgba(15, 23, 42, 0.4);
-          margin-bottom: 20px;
-        }
-
-        .custom-table {
-          width: 100%;
-          border-collapse: collapse;
-          font-size: 0.9rem;
-          text-align: left;
-        }
-
-        .custom-table th {
-          background: rgba(15, 23, 42, 0.8);
-          color: #38bdf8;
-          padding: 14px 16px;
-          font-weight: 600;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .custom-table td {
-          padding: 14px 16px;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-          color: #e2e8f0;
-        }
-
-        .custom-table tr:hover {
-          background: rgba(255, 255, 255, 0.02);
-        }
-
-        .log-terminal {
-          background: #090d16;
-          border: 1px solid #1e293b;
-          border-radius: 8px;
-          padding: 16px;
-          font-family: 'Consolas', monospace;
-          font-size: 0.85rem;
-          max-height: 240px;
-          overflow-y: auto;
-          color: #38bdf8;
-        }
-
-        .section-divider {
-          border-top: 1px solid rgba(255, 255, 255, 0.08);
-          margin: 30px 0;
-        }
-
-        .select-wrapper {
-          position: relative;
-        }
-
-        .select-field {
-          width: 100%;
-          max-width: 500px;
-          background: rgba(30, 41, 59, 0.7);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          color: #fff;
-          border-radius: 8px;
-          padding: 12px;
-          font-size: 1rem;
-          cursor: pointer;
-        }
-
-        .select-field:focus {
-          outline: none;
-          border-color: #38bdf8;
-        }
-      ` }} />
-
-      <div className="dashboard-container">
-        <header className="header-panel">
-          <h1 className="title-gradient">貳輪嶼二手機車數據分析系統</h1>
-          <p className="subtitle">跨店車款分類分析 • 跨店價格比較 • 報表導出</p>
-        </header>
-
-        <section className="glass-card">
-          <h2>系統操作與條件篩選</h2>
-          <form onSubmit={submit} className="form-grid">
-            <div className="form-group">
-              <label>搜尋關鍵字：</label>
-              <input
-                value={keywords}
-                onChange={(e) => setKeywords(e.target.value)}
-                className="input-field"
-                placeholder="例如: gogoro 或 125 或 SYM"
-              />
+      {/* Top Banner Header */}
+      <header className="border-b border-[#30363d] bg-[#1e1e24] py-4 px-6 sticky top-0 z-40 shadow-lg backdrop-blur-md bg-opacity-80">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">🏍️</span>
+            <div>
+              <h1 className="text-xl md:text-2xl font-bold bg-gradient-to-r from-[#00adb5] to-[#58a6ff] bg-clip-text text-transparent">
+                二手機車 CP 值智能選購與全台尋車導航系統
+              </h1>
+              <p className="text-xs text-[#b2bec3]">貳輪嶼官方數據大數據即時定位分析與 O2O 導航面板</p>
             </div>
+          </div>
 
-            <div className="form-group">
-              <label>最大頁數：</label>
-              <input
-                type="number"
-                value={maxPages}
-                min={1}
-                onChange={(e) => setMaxPages(e.target.value)}
-                className="input-field"
-              />
-            </div>
+          <div className="flex gap-3 items-center">
+            {crawling ? (
+              <div className="flex items-center gap-2 text-sm text-[#e67e22]">
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-[#e67e22] border-t-transparent"></div>
+                <span>{crawlStatus ? `${crawlStatus.status} (${crawlStatus.scraped_count} 筆)` : '執行爬網中...'}</span>
+              </div>
+            ) : (
+              <button
+                onClick={startCrawl}
+                className="bg-[#27ae60] hover:bg-[#2ecc71] text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-md"
+              >
+                🚀 執行大數據爬蟲
+              </button>
+            )}
 
-            <button type="submit" disabled={loading} className="primary-btn">
-              {loading ? (
-                <span className="pulse">正在進行抓取與分析...</span>
-              ) : (
-                '開始抓取並分析'
-              )}
+            <button
+              onClick={loadData}
+              className="bg-[#e67e22] hover:bg-[#f39c12] text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-md"
+            >
+              📊 載入數據
             </button>
-          </form>
-        </section>
 
-        {result && (
-          <section className="glass-card">
-            <h2>分析結果與數據導出</h2>
+            <a
+              href="/api/v1/report/excel"
+              className="bg-[#2980b9] hover:bg-[#3498db] text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-md inline-block"
+            >
+              📥 Excel 報表
+            </a>
+          </div>
+        </div>
+      </header>
 
-            {result.error && (
-              <div style={{ color: '#ef4444', background: 'rgba(239, 68, 68, 0.1)', padding: 14, borderRadius: 8, border: '1px solid rgba(239, 68, 68, 0.2)', marginBottom: 20 }}>
-                {result.error}
-              </div>
-            )}
-
-            {result.logs && (
-              <details style={{ marginBottom: 20 }}>
-                <summary style={{ cursor: 'pointer', fontWeight: '500', color: '#94a3b8', marginBottom: 10 }}>
-                  檢視執行日誌（{result.logs.length} 行）
-                </summary>
-                <div className="log-terminal">
-                  {result.logs.join('\n')}
-                </div>
-              </details>
-            )}
-
-            {result.rows !== undefined && (
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginBottom: 24 }}>
-                <span className="accent-badge">
-                  ✓ 成功抓取與洗淨 {result.rows} 筆資料
-                </span>
-                
-                {result.csv && (
-                  <button onClick={() => download(result.csv_filename || 'listings.csv', result.csv, 'text/csv')} className="sec-btn">
-                    下載 CSV 原始檔
-                  </button>
-                )}
-
-                {result.excel && (
-                  <button onClick={() => {
-                    const link = document.createElement('a');
-                    link.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' + result.excel;
-                    link.download = result.excel_filename || 'report.xlsx';
-                    link.click();
-                  }} className="sec-btn excel-btn">
-                    下載 Excel (含分頁分析)
-                  </button>
-                )}
-
-                {result.html && (
-                  <button onClick={() => download(result.html_filename || 'report.html', result.html, 'text/html')} className="sec-btn">
-                    下載 HTML 立體報表
-                  </button>
-                )}
-              </div>
-            )}
-
-            {models.length > 0 && (
-              <>
-                <div className="section-divider" />
-                
-                <div style={{ marginBottom: 24 }}>
-                  <label style={{ display: 'block', fontSize: '1rem', fontWeight: '600', color: '#38bdf8', marginBottom: 8 }}>
-                    選擇機車車款（不同分店之同款車已自動彙整）：
-                  </label>
-                  <div className="select-wrapper">
-                    <select
-                      value={selectedModel}
-                      onChange={(e) => setSelectedModel(e.target.value)}
-                      className="select-field"
-                    >
-                      <option value="">-- 請選擇車款 --</option>
-                      {models.map((model, idx) => (
-                        <option key={idx} value={model}>{model}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {!selectedModel && (
-                  <div style={{ background: 'rgba(56, 189, 248, 0.05)', border: '1px dashed rgba(56, 189, 248, 0.2)', borderRadius: 12, padding: 20, textAlign: 'center', color: '#94a3b8' }}>
-                    請在上方下拉式選單選擇欲查詢的「車款」，系統將會分類顯示該車款在全台各分店的價格比較與里程數據。
-                  </div>
-                )}
-
-                {selectedModel && filteredData.rows.length > 0 && (
-                  <>
-                    <h3 style={{ color: '#38bdf8', marginBottom: 16 }}>
-                      車款數據分析：{selectedModel}
-                    </h3>
-                    
-                    <div className="stats-grid">
-                      <div className="stat-item">
-                        <div className="stat-label">上架總筆數</div>
-                        <div className="stat-val">{filteredData.stats.count} 筆</div>
-                      </div>
-                      
-                      {filteredData.stats.avgPrice > 0 && (
-                        <div className="stat-item">
-                          <div className="stat-label">平均價格</div>
-                          <div className="stat-val stat-val-purple">NT$ {filteredData.stats.avgPrice.toLocaleString()}</div>
-                        </div>
-                      )}
-
-                      {filteredData.stats.minPrice > 0 && (
-                        <div className="stat-item">
-                          <div className="stat-label">價格區間</div>
-                          <div className="stat-val stat-val-green">
-                            NT$ {filteredData.stats.minPrice.toLocaleString()} ~ {filteredData.stats.maxPrice.toLocaleString()}
-                          </div>
-                        </div>
-                      )}
-
-                      {filteredData.stats.avgMileage > 0 && (
-                        <div className="stat-item">
-                          <div className="stat-label">平均里程</div>
-                          <div className="stat-val stat-val-orange">{filteredData.stats.avgMileage.toLocaleString()} km</div>
-                        </div>
-                      )}
-
-                      {filteredData.stats.minYear > 0 && (
-                        <div className="stat-item">
-                          <div className="stat-label">出廠年份區間</div>
-                          <div className="stat-val">
-                            {filteredData.stats.minYear === filteredData.stats.maxYear ? filteredData.stats.minYear : `${filteredData.stats.minYear} ~ ${filteredData.stats.maxYear}`}
-                          </div>
-                        </div>
-                      )}
-
-                      {filteredData.stats.avgCC > 0 && (
-                        <div className="stat-item">
-                          <div className="stat-label">排氣量 (平均)</div>
-                          <div className="stat-val">{filteredData.stats.avgCC} cc</div>
-                        </div>
-                      )}
-                    </div>
-
-                    {filteredData.storeStats.length > 0 && (
-                      <div style={{ marginBottom: 30 }}>
-                        <h4 style={{ color: '#94a3b8', margin: '0 0 12px 0' }}>各店售價與上架車數比較（跨店比較）</h4>
-                        <div className="table-wrapper">
-                          <table className="custom-table">
-                            <thead>
-                              <tr>
-                                <th>販售分店</th>
-                                <th style={{ textAlign: 'center' }}>上架數量</th>
-                                <th style={{ textAlign: 'right' }}>最低價格</th>
-                                <th style={{ textAlign: 'right' }}>最高價格</th>
-                                <th style={{ textAlign: 'right' }}>平均價格</th>
-                                <th style={{ textAlign: 'right' }}>平均行駛里程</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {filteredData.storeStats.map((store, idx) => (
-                                <tr key={idx}>
-                                  <td>{store.store}</td>
-                                  <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{store.count}</td>
-                                  <td style={{ textAlign: 'right', color: '#4ade80' }}>
-                                    {store.minPrice > 0 ? `NT$ ${store.minPrice.toLocaleString()}` : '-'}
-                                  </td>
-                                  <td style={{ textAlign: 'right', color: '#f87171' }}>
-                                    {store.maxPrice > 0 ? `NT$ ${store.maxPrice.toLocaleString()}` : '-'}
-                                  </td>
-                                  <td style={{ textAlign: 'right', fontWeight: 'bold' }}>
-                                    {store.avgPrice > 0 ? `NT$ ${store.avgPrice.toLocaleString()}` : '-'}
-                                  </td>
-                                  <td style={{ textAlign: 'right', color: '#fb923c' }}>
-                                    {store.avgMileage > 0 ? `${store.avgMileage.toLocaleString()} km` : '-'}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    )}
-
-                    <div>
-                      <h4 style={{ color: '#94a3b8', margin: '0 0 12px 0' }}>詳細車輛清單</h4>
-                      <div className="table-wrapper">
-                        <table className="custom-table">
-                          <thead>
-                            <tr>
-                              <th style={{ width: 50, textAlign: 'center' }}>#</th>
-                              <th>販售分店</th>
-                              <th style={{ textAlign: 'right' }}>售價</th>
-                              <th style={{ textAlign: 'right' }}>里程</th>
-                              <th style={{ textAlign: 'center' }}>出廠年份</th>
-                              <th style={{ textAlign: 'center' }}>排氣量</th>
-                              <th>官網商品連結</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {filteredData.rows.slice(0, 50).map((item, rowIndex) => (
-                              <tr key={rowIndex}>
-                                <td style={{ textAlign: 'center', color: '#94a3b8' }}>{rowIndex + 1}</td>
-                                <td>{item.store || '未知店家'}</td>
-                                <td style={{ textAlign: 'right', fontWeight: 'bold', color: '#c084fc' }}>
-                                  {item.price > 0 ? `NT$ ${item.price.toLocaleString()}` : '電洽'}
-                                </td>
-                                <td style={{ textAlign: 'right', color: '#fb923c' }}>
-                                  {item.mileage > 0 ? `${item.mileage.toLocaleString()} km` : '-'}
-                                </td>
-                                <td style={{ textAlign: 'center' }}>{item.year || '-'}</td>
-                                <td style={{ textAlign: 'center' }}>{item.cc > 0 ? `${item.cc} cc` : '-'}</td>
-                                <td>
-                                  {item.url ? (
-                                    <a href={item.url} target="_blank" rel="noreferrer" style={{ color: '#38bdf8', textDecoration: 'none', fontWeight: '500' }}>
-                                      前往貳輪嶼商品頁 ↗
-                                    </a>
-                                  ) : (
-                                    '-'
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                      {filteredData.rows.length > 50 && (
-                        <div style={{ textAlign: 'center', padding: '10px 0', color: '#64748b', fontSize: '0.85rem' }}>
-                          ...僅顯示前 50 筆，請點擊上方「下載 Excel」或「下載 HTML」查看完整數據。
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-              </>
-            )}
-
-            {result.png && (
-              <div style={{ marginTop: 30 }}>
-                <h3 style={{ color: '#38bdf8', marginBottom: 16 }}>數據分析圖表</h3>
-                <div style={{ background: 'rgba(15, 23, 42, 0.5)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: 12, padding: 16, textAlign: 'center' }}>
-                  <img src={`data:image/png;base64,${result.png}`} alt="Analysis" style={{ maxWidth: '100%', borderRadius: 8 }} />
-                </div>
-              </div>
-            )}
-          </section>
+      {/* Main Container */}
+      <main className="max-w-7xl mx-auto p-4 md:p-6">
+        {error && (
+          <div className="bg-[#e74c3c] bg-opacity-20 border border-[#e74c3c] text-[#eeeeee] p-4 rounded-lg mb-6 flex justify-between items-center">
+            <span>⚠️ 錯誤提示：{error}</span>
+            <button onClick={() => setError('')} className="text-sm font-bold opacity-80 hover:opacity-100">關閉</button>
+          </div>
         )}
-      </div>
-    </>
+
+        {/* Tab Bar */}
+        <div className="flex border-b border-[#30363d] mb-6 gap-2">
+          {[
+            { id: 'dashboard', label: '📊 數據看板與推薦' },
+            { id: 'search', label: '🔍 全台車源篩選對比' },
+            { id: 'stores', label: '📍 實體門市尋車' },
+            { id: 'charts', label: '📈 市場統計圖表' }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-5 py-3 text-sm font-bold border-b-2 transition-all ${activeTab === tab.id
+                ? 'border-[#00adb5] text-[#00adb5]'
+                : 'border-transparent text-[#b2bec3] hover:text-[#eeeeee]'
+                }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab Contents */}
+        {activeTab === 'dashboard' && (
+          <div className="space-y-6">
+            {/* Metric Cards */}
+            {analysis && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[
+                  { title: "在售車輛總數", val: `${analysis.total_count} 輛`, color: "#00adb5" },
+                  { title: "市場平均車價", val: `NT$ ${intVal(analysis.avg_current_price).toLocaleString()}`, color: "#58a6ff" },
+                  { title: "市場平均里程", val: `${intVal(analysis.avg_mileage).toLocaleString()} km`, color: "#f59e0b" },
+                  { title: "超值車源比例", val: `${(analysis.value_choices_count / analysis.total_count * 100).toFixed(1)}%`, color: "#2ecc71" }
+                ].map((card, idx) => (
+                  <div key={idx} className="bg-[#1e1e24] p-5 rounded-xl border border-[#30363d] shadow-md relative overflow-hidden">
+                    <div className="absolute top-0 left-0 h-1 w-full" style={{ backgroundColor: card.color }}></div>
+                    <span className="text-xs text-[#b2bec3] block mb-2">{card.title}</span>
+                    <strong className="text-2xl font-bold" style={{ color: card.color }}>{card.val}</strong>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Top 10 Tables Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* CP Top 10 */}
+              <div className="bg-[#1e1e24] p-5 rounded-xl border border-[#30363d] shadow-lg hover:border-[#2ecc71] transition-all duration-300">
+                <h2 className="text-lg font-bold text-[#2ecc71] mb-4 flex items-center gap-2">
+                  🔥 全網性價比超值神車榜 Top 10 (越高越划算)
+                </h2>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left text-[#eeeeee]">
+                    <thead>
+                      <tr className="border-b border-[#30363d] text-[#b2bec3] bg-[#121214]">
+                        <th className="p-3">圖片</th>
+                        <th className="p-3">車款名稱</th>
+                        <th className="p-3">年份</th>
+                        <th className="p-3 text-right">里程 (km)</th>
+                        <th className="p-3 text-right">價格 (元)</th>
+                        <th className="p-3 text-center">CP指數</th>
+                        <th className="p-3 text-center">標籤</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {products
+                        .sort((a, b) => b.cp_index - a.cp_index)
+                        .slice(0, 10)
+                        .map((p, idx) => (
+                          <tr key={idx} className="border-b border-[#30363d] hover:bg-[#21262d] transition-all">
+                            <td className="p-2">
+                              {p.img_url ? (
+                                <img src={p.img_url} alt={p.title} className="h-8 w-12 object-cover rounded border border-[#30363d]" />
+                              ) : (
+                                <div className="h-8 w-12 bg-[#121214] rounded border border-[#30363d] flex items-center justify-center text-[10px] text-[#555]">🏍️</div>
+                              )}
+                            </td>
+                            <td className="p-3 font-semibold truncate max-w-[150px]">
+                              <a href={p.url} target="_blank" className="hover:underline text-[#58a6ff]">
+                                {p.title}
+                              </a>
+                            </td>
+                            <td className="p-3">{p.year}</td>
+                            <td className="p-3 text-right">{intVal(p.mileage).toLocaleString()}</td>
+                            <td className="p-3 text-right font-bold text-[#e67e22]">{intVal(p.current_price).toLocaleString()}</td>
+                            <td className="p-3 text-center font-bold text-[#2ecc71]">{p.cp_index.toFixed(2)}</td>
+                            <td className="p-3 text-center">
+                              <span className="bg-[#2ecc71] text-white px-2 py-0.5 rounded text-[10px] font-bold">超值</span>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Low Mileage Top 10 */}
+              <div className="bg-[#1e1e24] p-5 rounded-xl border border-[#30363d] shadow-lg hover:border-[#58a6ff] transition-all duration-300">
+                <h2 className="text-lg font-bold text-[#58a6ff] mb-4 flex items-center gap-2">
+                  🏍️ 全網低里程優質精選 Top 10
+                </h2>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left text-[#eeeeee]">
+                    <thead>
+                      <tr className="border-b border-[#30363d] text-[#b2bec3] bg-[#121214]">
+                        <th className="p-3">圖片</th>
+                        <th className="p-3">車款名稱</th>
+                        <th className="p-3">年份</th>
+                        <th className="p-3 text-right">里程 (km)</th>
+                        <th className="p-3 text-right">價格 (元)</th>
+                        <th className="p-3 text-center">CP指數</th>
+                        <th className="p-3 text-center">標籤</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {products
+                        .sort((a, b) => a.mileage - b.mileage)
+                        .slice(0, 10)
+                        .map((p, idx) => (
+                          <tr key={idx} className="border-b border-[#30363d] hover:bg-[#21262d] transition-all">
+                            <td className="p-2">
+                              {p.img_url ? (
+                                <img src={p.img_url} alt={p.title} className="h-8 w-12 object-cover rounded border border-[#30363d]" />
+                              ) : (
+                                <div className="h-8 w-12 bg-[#121214] rounded border border-[#30363d] flex items-center justify-center text-[10px] text-[#555]">🏍️</div>
+                              )}
+                            </td>
+                            <td className="p-3 font-semibold truncate max-w-[150px]">
+                              <a href={p.url} target="_blank" className="hover:underline text-[#58a6ff]">
+                                {p.title}
+                              </a>
+                            </td>
+                            <td className="p-3">{p.year}</td>
+                            <td className="p-3 text-right font-bold text-[#58a6ff]">{intVal(p.mileage).toLocaleString()}</td>
+                            <td className="p-3 text-right text-[#e67e22]">{intVal(p.current_price).toLocaleString()}</td>
+                            <td className="p-3 text-center">{p.cp_index.toFixed(2)}</td>
+                            <td className="p-3 text-center">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold text-white ${p.cp_label === '超值' ? 'bg-[#2ecc71]' : p.cp_label === '合理' ? 'bg-[#3498db]' : 'bg-[#e74c3c]'
+                                }`}>{p.cp_label}</span>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'search' && (
+          <div className="space-y-6">
+            {/* Filter Panel */}
+            <div className="bg-[#1e1e24] p-5 rounded-xl border border-[#30363d] shadow-md">
+              <h3 className="text-sm font-bold text-[#00adb5] mb-4">🔧 進階車源條件篩選</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
+                <div>
+                  <label className="text-xs text-[#b2bec3] block mb-2">廠牌品牌</label>
+                  <select
+                    value={brandFilter}
+                    onChange={e => setBrandFilter(e.target.value)}
+                    className="w-full bg-[#121214] border border-[#30363d] rounded-lg p-2 text-sm text-[#eeeeee] focus:border-[#00adb5]"
+                  >
+                    {brands.map((b, i) => <option key={i} value={b}>{b}</option>)}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs text-[#b2bec3] block mb-2">實體門市</label>
+                  <select
+                    value={locationFilter}
+                    onChange={e => setLocationFilter(e.target.value)}
+                    className="w-full bg-[#121214] border border-[#30363d] rounded-lg p-2 text-sm text-[#eeeeee]"
+                  >
+                    <option value="全部">全部門市</option>
+                    {BRANCHES.map((b, i) => <option key={i} value={b.name}>{b.name}</option>)}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs text-[#b2bec3] block mb-2">預算上限 (萬元)</label>
+                  <input
+                    type="number"
+                    placeholder="不限"
+                    value={priceMaxFilter}
+                    onChange={e => setPriceMaxFilter(e.target.value)}
+                    className="w-full bg-[#121214] border border-[#30363d] rounded-lg p-2 text-sm text-[#eeeeee]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-[#b2bec3] block mb-2">里程上限 (公里)</label>
+                  <input
+                    type="number"
+                    placeholder="不限"
+                    value={mileMaxFilter}
+                    onChange={e => setMileMaxFilter(e.target.value)}
+                    className="w-full bg-[#121214] border border-[#30363d] rounded-lg p-2 text-sm text-[#eeeeee]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-[#b2bec3] block mb-2">關鍵字搜尋</label>
+                  <input
+                    type="text"
+                    placeholder="搜尋型號..."
+                    value={kwFilter}
+                    onChange={e => setKwFilter(e.target.value)}
+                    className="w-full bg-[#121214] border border-[#30363d] rounded-lg p-2 text-sm text-[#eeeeee]"
+                  />
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    disabled={selectedBikes.length < 2}
+                    onClick={() => setShowCompareModal(true)}
+                    className="w-full bg-[#3f51b5] hover:bg-[#5c6bc0] disabled:bg-gray-700 disabled:opacity-40 text-white p-2 rounded-lg text-sm font-semibold transition-all"
+                  >
+                    ⚖️ 對比 ({selectedBikes.length})
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* List Table or Card Grid */}
+            <div className="bg-[#1e1e24] p-5 rounded-xl border border-[#30363d] shadow-lg">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-[#b2bec3]">已篩選出 {sortedProducts.length} 筆車輛資訊</span>
+                  <div className="bg-[#121214] border border-[#30363d] rounded-lg p-0.5 flex gap-1">
+                    <button
+                      onClick={() => setViewMode('table')}
+                      className={`px-3 py-1 rounded text-xs font-semibold transition-all ${viewMode === 'table' ? 'bg-[#00adb5] text-white shadow' : 'text-[#b2bec3] hover:text-[#eeeeee]'
+                        }`}
+                    >
+                      📋 列表
+                    </button>
+                    <button
+                      onClick={() => setViewMode('grid')}
+                      className={`px-3 py-1 rounded text-xs font-semibold transition-all ${viewMode === 'grid' ? 'bg-[#00adb5] text-white shadow' : 'text-[#b2bec3] hover:text-[#eeeeee]'
+                        }`}
+                    >
+                      🎴 卡片
+                    </button>
+                  </div>
+                </div>
+                {selectedBikes.length > 0 && (
+                  <button
+                    onClick={() => setSelectedBikes([])}
+                    className="text-xs text-[#e74c3c] hover:underline"
+                  >
+                    清除選取 ({selectedBikes.length})
+                  </button>
+                )}
+              </div>
+
+              {viewMode === 'table' ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left text-[#eeeeee]">
+                    <thead>
+                      <tr className="border-b border-[#30363d] text-[#b2bec3] bg-[#121214] select-none cursor-pointer">
+                        <th className="p-3 text-center">選取</th>
+                        <th className="p-3">縮圖</th>
+                        <th className="p-3" onClick={() => handleSort('title')}>商品名稱 {sortField === 'title' && (sortAsc ? '▲' : '▼')}</th>
+                        <th className="p-3 text-center" onClick={() => handleSort('brand')}>廠牌 {sortField === 'brand' && (sortAsc ? '▲' : '▼')}</th>
+                        <th className="p-3 text-center" onClick={() => handleSort('displacement')}>排氣量 {sortField === 'displacement' && (sortAsc ? '▲' : '▼')}</th>
+                        <th className="p-3 text-center" onClick={() => handleSort('year')}>年份 {sortField === 'year' && (sortAsc ? '▲' : '▼')}</th>
+                        <th className="p-3 text-right" onClick={() => handleSort('mileage')}>里程 {sortField === 'mileage' && (sortAsc ? '▲' : '▼')}</th>
+                        <th className="p-3 text-center" onClick={() => handleSort('location')}>門市 {sortField === 'location' && (sortAsc ? '▲' : '▼')}</th>
+                        <th className="p-3 text-right" onClick={() => handleSort('current_price')}>價格 {sortField === 'current_price' && (sortAsc ? '▲' : '▼')}</th>
+                        <th className="p-3 text-center" onClick={() => handleSort('cp_index')}>CP指數 {sortField === 'cp_index' && (sortAsc ? '▲' : '▼')}</th>
+                        <th className="p-3 text-center" onClick={() => handleSort('cp_label')}>評級 {sortField === 'cp_label' && (sortAsc ? '▲' : '▼')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedProducts.map((p, idx) => {
+                        const isSelected = !!selectedBikes.find(b => b.id === p.id);
+                        return (
+                          <tr
+                            key={idx}
+                            onClick={() => handleSelectBike(p)}
+                            className={`border-b border-[#30363d] hover:bg-[#21262d] cursor-pointer transition-all ${isSelected ? 'bg-[#00adb5] bg-opacity-10' : ''
+                              }`}
+                          >
+                            <td className="p-3 text-center" onClick={e => e.stopPropagation()}>
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => handleSelectBike(p)}
+                                className="rounded accent-[#00adb5] h-4 w-4"
+                              />
+                            </td>
+                            <td className="p-2" onClick={e => e.stopPropagation()}>
+                              {p.img_url ? (
+                                <img src={p.img_url} alt={p.title} className="h-10 w-14 object-cover rounded border border-[#30363d]" />
+                              ) : (
+                                <div className="h-10 w-14 bg-[#121214] rounded border border-[#30363d] flex items-center justify-center text-xs text-[#555]">🏍️</div>
+                              )}
+                            </td>
+                            <td className="p-3 font-semibold">
+                              <a href={p.url} target="_blank" onClick={e => e.stopPropagation()} className="hover:underline text-[#58a6ff]">
+                                {p.title}
+                              </a>
+                            </td>
+                            <td className="p-3 text-center">{p.brand}</td>
+                            <td className="p-3 text-center">{p.displacement} cc</td>
+                            <td className="p-3 text-center">{p.year}</td>
+                            <td className="p-3 text-right font-mono">{intVal(p.mileage).toLocaleString()} km</td>
+                            <td className="p-3 text-center text-[#b2bec3]">{p.location}</td>
+                            <td className="p-3 text-right font-bold text-[#e67e22]">NT$ {intVal(p.current_price).toLocaleString()}</td>
+                            <td className="p-3 text-center font-bold text-[#00adb5]">{p.cp_index.toFixed(2)}</td>
+                            <td className="p-3 text-center">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold text-white ${p.cp_label === '超值' ? 'bg-[#2ecc71]' : p.cp_label === '合理' ? 'bg-[#3498db]' : 'bg-[#e74c3c]'
+                                }`}>{p.cp_label}</span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {sortedProducts.map((p, idx) => {
+                    const isSelected = !!selectedBikes.find(b => b.id === p.id);
+                    return (
+                      <div
+                        key={idx}
+                        onClick={() => handleSelectBike(p)}
+                        className={`relative bg-[#121214] border rounded-xl overflow-hidden cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:border-[#00adb5] flex flex-col justify-between ${isSelected ? 'border-[#00adb5] ring-2 ring-[#00adb5] ring-opacity-50' : 'border-[#30363d]'
+                          }`}
+                      >
+                        {/* Selection Badge / Checkbox */}
+                        <div className="absolute top-3 left-3 z-10 bg-[#1e1e24] bg-opacity-75 p-1.5 rounded-lg border border-[#30363d]" onClick={e => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleSelectBike(p)}
+                            className="rounded accent-[#00adb5] h-4 w-4 cursor-pointer"
+                          />
+                        </div>
+
+                        {/* CP Label Badge */}
+                        <div className="absolute top-3 right-3 z-10">
+                          <span className={`px-2 py-1 rounded text-xs font-bold text-white shadow-md ${p.cp_label === '超值' ? 'bg-[#2ecc71]' : p.cp_label === '合理' ? 'bg-[#3498db]' : 'bg-[#e74c3c]'
+                            }`}>{p.cp_label}</span>
+                        </div>
+
+                        {/* Image Preview */}
+                        <div className="relative h-44 w-full bg-[#1e1e24] overflow-hidden flex items-center justify-center border-b border-[#30363d]">
+                          {p.img_url ? (
+                            <img src={p.img_url} alt={p.title} className="h-full w-full object-cover transition-transform duration-300 hover:scale-105" />
+                          ) : (
+                            <span className="text-4xl text-[#555]">🏍️</span>
+                          )}
+                        </div>
+
+                        {/* Content */}
+                        <div className="p-4 flex-grow flex flex-col justify-between">
+                          <div>
+                            <div className="flex justify-between items-center text-xs text-[#b2bec3] mb-1">
+                              <span>{p.brand} · {p.displacement}cc</span>
+                              <span>{p.year} 年</span>
+                            </div>
+
+                            <h4 className="font-bold text-sm text-[#eeeeee] line-clamp-2 hover:text-[#58a6ff] mb-2 min-h-[40px]">
+                              <a href={p.url} target="_blank" onClick={e => e.stopPropagation()}>
+                                {p.title}
+                              </a>
+                            </h4>
+                          </div>
+
+                          <div className="space-y-2 mt-2">
+                            <div className="flex justify-between text-xs text-[#b2bec3]">
+                              <span>🛣️ 里程:</span>
+                              <span className="font-mono font-semibold text-[#eeeeee]">{intVal(p.mileage).toLocaleString()} km</span>
+                            </div>
+                            <div className="flex justify-between text-xs text-[#b2bec3]">
+                              <span>📍 門市:</span>
+                              <span className="text-[#eeeeee]">{p.location}</span>
+                            </div>
+
+                            <hr className="border-[#30363d] my-2" />
+
+                            <div className="flex justify-between items-end">
+                              <div>
+                                <span className="text-[10px] text-[#b2bec3] block">CP值指數</span>
+                                <span className="text-lg font-extrabold text-[#00adb5]">{p.cp_index.toFixed(2)}</span>
+                              </div>
+                              <div className="text-right">
+                                <span className="text-[10px] text-[#b2bec3] block">智能特價</span>
+                                <span className="text-lg font-extrabold text-[#e67e22]">NT$ {intVal(p.current_price).toLocaleString()}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'stores' && (
+          <div className="bg-[#1e1e24] p-5 rounded-xl border border-[#30363d] shadow-lg">
+            <h2 className="text-lg font-bold text-[#00adb5] mb-6">📍 貳輪嶼全台實體門市庫存尋車導航</h2>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              {/* Branch List */}
+              <div className="md:col-span-1 border-r border-[#30363d] pr-4 space-y-2 max-h-[500px] overflow-y-auto">
+                {BRANCHES.map((branch, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setSelectedBranch(branch)}
+                    className={`w-full text-left p-3 rounded-lg text-sm font-semibold transition-all ${selectedBranch.name === branch.name
+                      ? 'bg-[#00adb5] text-white shadow'
+                      : 'hover:bg-[#121214] text-[#b2bec3]'
+                      }`}
+                  >
+                    📍 {branch.name}
+                  </button>
+                ))}
+              </div>
+
+              {/* Branch Detail & Inventory */}
+              <div className="md:col-span-3 space-y-6">
+                <div className="bg-[#121214] p-4 rounded-xl border border-[#30363d]">
+                  <h3 className="text-lg font-bold text-[#00adb5] mb-3">{selectedBranch.name}</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-[#b2bec3]">
+                    <div>🗺️ 地址：<span className="text-[#eeeeee]">{selectedBranch.address}</span></div>
+                    <div>📞 電話：<span className="text-[#eeeeee]">{selectedBranch.phone}</span></div>
+                    <div>⏰ 營業時間：<span className="text-[#eeeeee]">{selectedBranch.hours}</span></div>
+                    <div>🟢 LINE 專人諮詢：<a href={selectedBranch.line} target="_blank" className="text-[#58a6ff] hover:underline">點此加入</a></div>
+                  </div>
+                </div>
+
+                {/* Branch Inventory Table */}
+                <div>
+                  <h4 className="text-sm font-bold text-[#eeeeee] mb-3">🚗 該店在庫車輛清單</h4>
+                  <div className="overflow-x-auto max-h-[350px] overflow-y-auto">
+                    <table className="w-full text-xs text-left">
+                      <thead>
+                        <tr className="border-b border-[#30363d] text-[#b2bec3] bg-[#121214]">
+                          <th className="p-2">縮圖</th>
+                          <th className="p-2">車款名稱</th>
+                          <th className="p-2 text-center">年份</th>
+                          <th className="p-2 text-right">里程 (km)</th>
+                          <th className="p-2 text-right">價格 (元)</th>
+                          <th className="p-2 text-center">CP值</th>
+                          <th className="p-2 text-center">規劃書</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {products
+                          .filter(p => {
+                            const bShort = cleanLocName(selectedBranch.name);
+                            const pLoc = cleanLocName(p.location || '');
+                            return pLoc.includes(bShort);
+                          })
+                          .map((p, idx) => (
+                            <tr key={idx} className="border-b border-[#30363d] hover:bg-[#21262d] transition-all">
+                              <td className="p-2">
+                                {p.img_url ? (
+                                  <img src={p.img_url} alt={p.title} className="h-6 w-9 object-cover rounded border border-[#30363d]" />
+                                ) : (
+                                  <div className="h-6 w-9 bg-[#121214] rounded border border-[#30363d] flex items-center justify-center text-[8px] text-[#555]">🏍️</div>
+                                )}
+                              </td>
+                              <td className="p-2 font-semibold">
+                                <a href={p.url} target="_blank" className="hover:underline text-[#58a6ff]">{p.title}</a>
+                              </td>
+                              <td className="p-2 text-center">{p.year}</td>
+                              <td className="p-2 text-right">{intVal(p.mileage).toLocaleString()}</td>
+                              <td className="p-2 text-right text-[#e67e22]">NT$ {intVal(p.current_price).toLocaleString()}</td>
+                              <td className="p-2 text-center font-bold text-[#00adb5]">{p.cp_index.toFixed(2)}</td>
+                              <td className="p-2 text-center">
+                                <button
+                                  onClick={() => exportAppointmentGuide(p)}
+                                  className="bg-[#27ae60] hover:bg-[#2ecc71] text-white px-2 py-1 rounded text-[10px] font-semibold transition-all"
+                                >
+                                  📝 匯出
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'charts' && (
+          <div className="bg-[#1e1e24] p-5 rounded-xl border border-[#30363d] shadow-lg space-y-6">
+            <h2 className="text-lg font-bold text-[#00adb5] mb-4">📈 市場大數據統計與可視化圖表</h2>
+            {charts ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-[#121214] p-3 rounded-lg border border-[#30363d] text-center">
+                  <h3 className="text-xs font-bold text-[#b2bec3] mb-2">二手機車售價分布直方圖</h3>
+                  <img src={charts.histogram_url} alt="Price Histogram" className="max-w-full rounded-md shadow-md" />
+                </div>
+
+                <div className="bg-[#121214] p-3 rounded-lg border border-[#30363d] text-center">
+                  <h3 className="text-xs font-bold text-[#b2bec3] mb-2">里程數與售價關係散佈圖</h3>
+                  <img src={charts.scatter_url} alt="Mileage Scatter Plot" className="max-w-full rounded-md shadow-md" />
+                </div>
+
+                <div className="bg-[#121214] p-3 rounded-lg border border-[#30363d] text-center md:col-span-2">
+                  <h3 className="text-xs font-bold text-[#b2bec3] mb-2">熱門在庫品牌市佔率 (Top 5)</h3>
+                  <img src={charts.brand_pie_url} alt="Brand Share Pie Chart" className="max-w-full md:max-w-[60%] mx-auto rounded-md shadow-md" />
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-20 text-[#b2bec3] text-sm">
+                暫無圖表數據。請確認您已點擊「📊 載入數據」獲取圖表連結。
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+
+      {/* Specifications Comparison Modal */}
+      {showCompareModal && selectedBikes.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-70 backdrop-blur-sm">
+          <div className="bg-[#1e1e24] rounded-xl border border-[#30363d] max-w-4xl w-full p-6 shadow-2xl relative">
+            <button
+              onClick={() => setShowCompareModal(false)}
+              className="absolute top-4 font-bold text-lg right-4 text-[#b2bec3] hover:text-[#eeeeee]"
+            >
+              ✕
+            </button>
+            <h3 className="text-lg font-bold text-[#00adb5] mb-6 flex items-center gap-2">
+              ⚖️ 心儀機車規格橫向對比
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {selectedBikes.map((bike, index) => {
+                const isBestPrice = bike.current_price === bestSpecs.minPrice;
+                const isBestMileage = bike.mileage === bestSpecs.minMileage;
+                const isBestYear = bike.year === bestSpecs.maxYear;
+
+                return (
+                  <div key={index} className="bg-[#121214] p-4 rounded-xl border border-[#30363d] space-y-4 hover:border-[#00adb5] transition-all duration-300">
+                    {bike.img_url ? (
+                      <img src={bike.img_url} alt={bike.title} className="h-28 w-full object-cover rounded-lg border border-[#30363d] mb-2" />
+                    ) : (
+                      <div className="h-28 w-full bg-[#1e1e24] rounded-lg border border-[#30363d] flex items-center justify-center text-2xl mb-2">🏍️</div>
+                    )}
+                    <h4 className="font-bold text-[#58a6ff] truncate text-sm" title={bike.title}>{bike.title}</h4>
+                    <hr className="border-[#30363d]" />
+                    <div className="space-y-2 text-xs">
+                      <div className={`p-2 rounded transition-all ${isBestPrice ? 'bg-[#27ae60] bg-opacity-20 border border-[#27ae60]' : 'bg-[#1e1e24]'}`}>
+                        💵 價格：<span className="font-bold text-[#e67e22]">NT$ {intVal(bike.current_price).toLocaleString()}</span> {isBestPrice && '🏆'}
+                      </div>
+
+                      <div className={`p-2 rounded transition-all ${isBestMileage ? 'bg-[#27ae60] bg-opacity-20 border border-[#27ae60]' : 'bg-[#1e1e24]'}`}>
+                        🛣️ 里程：<span className="font-bold">{intVal(bike.mileage).toLocaleString()} km</span> {isBestMileage && '🏆'}
+                      </div>
+
+                      <div className={`p-2 rounded transition-all ${isBestYear ? 'bg-[#27ae60] bg-opacity-20 border border-[#27ae60]' : 'bg-[#1e1e24]'}`}>
+                        📅 年份：<span className="font-bold">{bike.year} 年</span> {isBestYear && '🏆'}
+                      </div>
+
+                      <div className="p-2 flex justify-between">
+                        <span className="text-[#b2bec3]">🔥 CP值指數:</span>
+                        <span className="font-bold text-[#00adb5]">{bike.cp_index.toFixed(2)} ({bike.cp_label})</span>
+                      </div>
+
+                      <div className="p-2 flex justify-between border-t border-[#1e1e24]">
+                        <span className="text-[#b2bec3]">📍 實體門市:</span>
+                        <span className="text-[#eeeeee]">{bike.location}</span>
+                      </div>
+
+                      <div className="p-2 flex justify-between">
+                        <span className="text-[#b2bec3]">🏍️ 排氣量:</span>
+                        <span className="text-[#eeeeee]">{bike.displacement} cc</span>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => exportAppointmentGuide(bike)}
+                      className="w-full bg-[#27ae60] hover:bg-[#2ecc71] text-white p-2 rounded-lg text-xs font-bold transition-all shadow-md"
+                    >
+                      📝 匯出此車預約看車規劃書
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Footer */}
+      <footer className="max-w-7xl mx-auto py-10 text-center text-xs text-[#b2bec3] border-t border-[#30363d] mt-10">
+        <p>二手機車大數據分析平台 © 2026</p>
+        <p className="mt-2 text-[10px]">部署指引：將此專案目錄推送到 GitHub 並導入 Vercel，設定 <code>DATABASE_URL</code> 可持久保存爬取數據。</p>
+      </footer>
+    </div>
   )
+}
+
+function intVal(val) {
+  if (val === undefined || val === null) return 0;
+  return Math.round(Number(val));
 }
