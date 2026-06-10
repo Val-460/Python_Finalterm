@@ -143,19 +143,57 @@ def get_db():
         db.close()
 
 def get_cleaned_title(title: str) -> str:
-    """從機車商品標題中提取基礎車款名稱 (移去店家、年份、車號)"""
+    """從機車商品標題中提取基礎車款名稱 (移去店家、年份、車號、括號字尾、品牌重疊與規格綴詞)"""
     if not title:
         return ""
     clean = title
-    # 移除門市，如 【新北樹林店】 或 [台北大同店]
-    clean = re.sub(r'[【\[](.*?)[】\]]', '', clean)
-    # 移除出廠年份，如 2019, 2020
-    clean = re.sub(r'\b(20\d\d|19\d\d)\b', '', clean)
-    # 移除車號編碼，如 #8929 或 # 1234
-    clean = re.sub(r'#\s*\d+', '', clean)
-    # 移除非法多餘空白
+    
+    # 1. 移除門市，如 【新北樹林店】 或 [台北大同店]
+    clean = re.sub(r'[【\[](.*?)[】\]]', ' ', clean)
+    
+    # 2. 移除出廠年份，如 2019, 2020
+    clean = re.sub(r'\b(20\d\d|19\d\d)\b', ' ', clean)
+    
+    # 3. 移除車號編碼，如 #8929 或 # 1234
+    clean = re.sub(r'#\s*\d+', ' ', clean)
+    
+    # 4. 移除所有括號及其內容，例如 (碟煞)、（皮帶版）
+    clean = re.sub(r'[\(（].*?[\)）]', ' ', clean)
+    
+    # 5. 移除常見品牌詞（不分大小寫、中文與英文）
+    brand_words = [
+        "山葉", "yamaha", "yamah", 
+        "三陽", "sym", 
+        "光陽", "kymco", 
+        "摩特動力", "pgo", 
+        "鈴木", "suzuki", "台鈴", 
+        "本田", "honda", 
+        "偉士牌", "vespa", 
+        "宏佳騰", "aeon", 
+        "睿能", "gogoro", 
+        "川崎", "kawasaki"
+    ]
+    for word in brand_words:
+        pattern = re.compile(re.escape(word), re.IGNORECASE)
+        clean = pattern.sub(' ', clean)
+
+    # 6. 循環移除尾部的規格修飾詞與排氣量數字（因為多個修飾詞可能會並存，如 125雙碟ABS）
+    spec_regex = re.compile(r'\s*(?:ABS|TCS|KEYLESS|CBS|UBS|雙碟|單碟|碟煞|鼓煞|特仕|精裝|跑車|皮帶|鍊條|鑰匙|仕樣|化油|噴射)+(?:版|款|型|版本)?\s*$', re.IGNORECASE)
+    cc_regex = re.compile(r'\s*\b(?:125|158|110|150|100|115|120|180|200|250|300|350|400)\s*(?:cc|CC)?\b\s*$', re.IGNORECASE)
+    
+    while True:
+        clean = re.sub(r'\s+', ' ', clean).strip()
+        original_len = len(clean)
+        clean = spec_regex.sub(' ', clean)
+        clean = cc_regex.sub(' ', clean)
+        clean = re.sub(r'\s+', ' ', clean).strip()
+        if len(clean) == original_len:
+            break
+
+    # 7. 清理多餘空格
     clean = re.sub(r'\s+', ' ', clean)
     return clean.strip()
+
 
 # =====================================================================
 # 3. 資料庫 ORM 模型 (MODELS)
@@ -1272,14 +1310,12 @@ Base.metadata.create_all(bind=engine)
 try:
     db = SessionLocal()
     
-    # 1. 檢查並寫入預設對照規則
+    # 1. 檢查並寫入預設對照規則 (採用清理後的車款名稱)
     default_rules = {
-        "GOGORO VIVA MIX BELT(皮帶版)": "GOGORO VIVA MIX BELT",
-        "GOGORO VIVA MIX BELT": "GOGORO VIVA MIX BELT",
-        "GOGORO VIVA MIX KEYLESS": "GOGORO VIVA MIX KEYLESS",
-        "GOGORO VIVA KEYLESS 雙碟": "GOGORO VIVA KEYLESS",
-        "GOGORO VIVA 鑰匙版": "GOGORO VIVA KEY",
-        "GOGORO VIVA XL": "GOGORO VIVA XL",
+        "VIVA MIX BELT": "VIVA MIX",
+        "VIVA MIX": "VIVA MIX",
+        "VIVA": "VIVA",
+        "VIVA XL": "VIVA XL",
     }
     
     mappings_count = db.query(ModelMapping).count()
@@ -1290,24 +1326,36 @@ try:
         db.commit()
         logger.info("寫入預設對照規則完成！")
         
-    # 2. 自動為所有已存在的 Product 車款更新 model_name
-    products_without_model = db.query(Product).filter((Product.model_name == None) | (Product.model_name == "")).all()
-    if products_without_model:
-        logger.info(f"發現 {len(products_without_model)} 筆資料未設定車款名稱，開始自動比對與設定...")
-        for p in products_without_model:
+    # 2. 自動為所有已存在的 Product 車款更新 model_name，確保其符合最新的清理與對照規則
+    all_products = db.query(Product).all()
+    if all_products:
+        logger.info(f"開始自動比對與設定共 {len(all_products)} 筆商品之車款名稱...")
+        
+        # 預先讀取所有 mappings 緩存以加快比對速度
+        existing_mappings = {m.raw_name: m.mapped_name for m in db.query(ModelMapping).all()}
+        
+        updated_any = False
+        for p in all_products:
             cleaned = get_cleaned_title(p.title)
-            # 尋找是否有對應的 mapping
-            mapping = db.query(ModelMapping).filter_by(raw_name=cleaned).first()
-            if mapping:
-                p.model_name = mapping.mapped_name
+            if cleaned in existing_mappings:
+                target_model = existing_mappings[cleaned]
             else:
-                # 自癒性：自動建立無對照的新對照項目
                 new_map = ModelMapping(raw_name=cleaned, mapped_name=cleaned)
                 db.add(new_map)
-                db.commit() # Commit to make it available for search next time
-                p.model_name = cleaned
-        db.commit()
-        logger.info("自動比對與設定車款名稱完成！")
+                existing_mappings[cleaned] = cleaned
+                target_model = cleaned
+                updated_any = True
+            
+            if p.model_name != target_model:
+                p.model_name = target_model
+                updated_any = True
+        
+        if updated_any:
+            db.commit()
+            logger.info("自動比對與設定車款名稱完成！")
+        else:
+            logger.info("所有商品車款名稱均符合最新對照規則，無需更新。")
+
 except Exception as mapping_err:
     logger.error(f"啟動時對照表自癒或更新車款名稱失敗: {mapping_err}")
 finally:
