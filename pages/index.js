@@ -39,6 +39,53 @@ export default function Home() {
   const [crawlStatus, setCrawlStatus] = useState(null);
   const [error, setError] = useState('');
 
+  // Data Loading States
+  const [dataLoading, setDataLoading] = useState(false);
+  const [dataLoadingProgress, setDataLoadingProgress] = useState(0);
+  const [dataLoadingStatus, setDataLoadingStatus] = useState('');
+
+  // Helper to calculate crawl percentage (0 - 100)
+  const getCrawlProgress = () => {
+    if (!crawlStatus) return 0;
+    const { current_page, total_pages, status } = crawlStatus;
+    
+    if (status === 'success') return 100;
+    if (status === 'failed') return 0;
+    
+    // Phase 1: Scanning list pages (0% to 50%)
+    if (status.includes("正在掃描列表") || current_page > 0) {
+      const page = current_page || 1;
+      const total = total_pages || 16;
+      return Math.min(50, Math.round((page / total) * 50));
+    }
+    
+    // Phase 2: Fetching mileage (50% to 90%)
+    if (status.includes("爬取里程數")) {
+      const match = status.match(/爬取里程數:\s*(\d+)\/(\d+)/);
+      if (match) {
+        const x = parseInt(match[1], 10);
+        const y = parseInt(match[2], 10);
+        if (y > 0) {
+          return 50 + Math.round((x / y) * 40);
+        }
+      }
+      return 70;
+    }
+    
+    // Phase 3: Post-processing (90% to 100%)
+    if (status.includes("計算大數據 CP")) {
+      return 92;
+    }
+    if (status.includes("更新可視化圖表")) {
+      return 95;
+    }
+    if (status.includes("生成統計報表")) {
+      return 98;
+    }
+    
+    return 10;
+  };
+
   // Filter States
   const [brandFilter, setBrandFilter] = useState('全部');
   const [locationFilter, setLocationFilter] = useState('全部');
@@ -66,25 +113,69 @@ export default function Home() {
 
   const loadData = async () => {
     setError('');
+    setDataLoading(true);
+    setDataLoadingProgress(0);
+    setDataLoadingStatus('正在初始化載入程序...');
+    
+    let currentProgress = 0;
+    
+    // Smooth progress animation helper
+    const animateTo = (target, duration = 400) => {
+      return new Promise((resolve) => {
+        const start = currentProgress;
+        const startTime = performance.now();
+        const step = (now) => {
+          const elapsed = now - startTime;
+          const pct = Math.min(1, elapsed / duration);
+          currentProgress = Math.round(start + (target - start) * pct);
+          setDataLoadingProgress(currentProgress);
+          if (pct < 1) {
+            requestAnimationFrame(step);
+          } else {
+            resolve();
+          }
+        };
+        requestAnimationFrame(step);
+      });
+    };
+
     try {
+      // Step 1: Loading Products list
+      setDataLoadingStatus('正在從資料庫載入機車商品清單...');
+      await animateTo(20, 200);
       const pResp = await fetch('/api/v1/products');
       if (!pResp.ok) throw new Error("尚未爬取商品資料，請點擊上方按鈕執行大數據爬蟲");
       const pData = await pResp.json();
       setProducts(pData);
+      await animateTo(45, 300);
 
+      // Step 2: Loading Analysis Summary
+      setDataLoadingStatus('已載入商品清單，正在載入 CP 值大數據統計與分析指標...');
       const aResp = await fetch('/api/v1/analysis');
       if (aResp.ok) {
         const aData = await aResp.json();
         setAnalysis(aData);
       }
+      await animateTo(70, 300);
 
+      // Step 3: Loading charts
+      setDataLoadingStatus('已載入分析統計，正在生成並載入市場統計圖表...');
       const cResp = await fetch('/api/v1/analysis/charts', { method: 'POST' });
       if (cResp.ok) {
         const cData = await cResp.json();
         setCharts(cData);
       }
+      await animateTo(100, 400);
+      setDataLoadingStatus('資料載入成功！');
+      
+      // Let user see 100% complete briefly
+      await new Promise(resolve => setTimeout(resolve, 600));
     } catch (err) {
       setError(err.message);
+    } finally {
+      setDataLoading(false);
+      setDataLoadingProgress(0);
+      setDataLoadingStatus('');
     }
   };
 
@@ -286,9 +377,14 @@ export default function Home() {
 
           <div className="flex gap-3 items-center">
             {crawling ? (
-              <div className="flex items-center gap-2 text-sm text-[#e67e22]">
-                <div className="animate-spin rounded-full h-4 w-4 border-2 border-[#e67e22] border-t-transparent"></div>
-                <span>{crawlStatus ? `${crawlStatus.status} (${crawlStatus.scraped_count} 筆)` : '執行爬網中...'}</span>
+              <div className="flex flex-col items-end gap-1.5 bg-[#121214] bg-opacity-40 p-2 rounded-lg border border-[#30363d] min-w-[180px]">
+                <div className="flex items-center gap-2 text-xs text-[#e67e22]">
+                  <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-[#e67e22] border-t-transparent"></div>
+                  <span className="font-semibold">爬蟲進行中 ({getCrawlProgress()}%)</span>
+                </div>
+                <div className="w-full bg-white h-2 rounded-full overflow-hidden p-[0.5px]">
+                  <div className="bg-blue-500 h-full rounded-full transition-all duration-300" style={{ width: `${getCrawlProgress()}%` }}></div>
+                </div>
               </div>
             ) : (
               <button
@@ -924,6 +1020,60 @@ export default function Home() {
         <p>二手機車大數據分析平台 © 2026</p>
         <p className="mt-2 text-[10px]">部署指引：將此專案目錄推送到 GitHub 並導入 Vercel，設定 <code>DATABASE_URL</code> 可持久保存爬取數據。</p>
       </footer>
+
+      {/* Data Loading Overlay Modal */}
+      {dataLoading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-70 backdrop-blur-md">
+          <div className="bg-[#1e1e24] rounded-2xl border border-[#30363d] max-w-md w-full p-6 shadow-2xl space-y-4 animate-fade-in">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-[#58a6ff] flex items-center gap-2">
+                <span className="animate-pulse text-xl">🔄</span> 系統載入數據中
+              </h3>
+              <span className="text-sm font-semibold text-[#00adb5] font-mono">{dataLoadingProgress}%</span>
+            </div>
+            
+            {/* Progress Bar (White background, blue bar) */}
+            <div className="w-full bg-white h-3 rounded-full overflow-hidden shadow-inner p-[1px]">
+              <div 
+                className="bg-blue-600 h-full rounded-full transition-all duration-300 ease-out" 
+                style={{ width: `${dataLoadingProgress}%` }}
+              ></div>
+            </div>
+            
+            <div className="flex justify-between items-center text-xs text-[#b2bec3]">
+              <span className="truncate max-w-[320px]">{dataLoadingStatus}</span>
+              <span className="shrink-0 animate-pulse text-[10px]">Processing...</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Crawling Progress Floating Widget */}
+      {crawling && crawlStatus && (
+        <div className="fixed bottom-6 right-6 z-40 max-w-sm w-full bg-[#1e1e24] rounded-2xl border border-[#30363d] p-5 shadow-2xl space-y-3 animate-slide-in">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-bold text-[#e67e22] flex items-center gap-2">
+              <span className="animate-spin text-xs">⚙️</span> 大數據爬蟲執行中
+            </h4>
+            <span className="text-xs font-semibold text-[#00adb5] font-mono">{getCrawlProgress()}%</span>
+          </div>
+          
+          {/* Progress Bar (White background, blue bar) */}
+          <div className="w-full bg-white h-2.5 rounded-full overflow-hidden shadow-inner p-[1px]">
+            <div 
+              className="bg-blue-500 h-full rounded-full transition-all duration-300 ease-out" 
+              style={{ width: `${getCrawlProgress()}%` }}
+            ></div>
+          </div>
+          
+          <div className="flex justify-between items-center text-[11px] text-[#b2bec3]">
+            <span className="truncate max-w-[200px]" title={crawlStatus.status}>
+              {crawlStatus.status}
+            </span>
+            <span className="shrink-0">已爬取 {crawlStatus.scraped_count} 筆</span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
