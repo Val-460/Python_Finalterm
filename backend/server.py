@@ -142,6 +142,21 @@ def get_db():
     finally:
         db.close()
 
+def get_cleaned_title(title: str) -> str:
+    """從機車商品標題中提取基礎車款名稱 (移去店家、年份、車號)"""
+    if not title:
+        return ""
+    clean = title
+    # 移除門市，如 【新北樹林店】 或 [台北大同店]
+    clean = re.sub(r'[【\[](.*?)[】\]]', '', clean)
+    # 移除出廠年份，如 2019, 2020
+    clean = re.sub(r'\b(20\d\d|19\d\d)\b', '', clean)
+    # 移除車號編碼，如 #8929 或 # 1234
+    clean = re.sub(r'#\s*\d+', '', clean)
+    # 移除非法多餘空白
+    clean = re.sub(r'\s+', ' ', clean)
+    return clean.strip()
+
 # =====================================================================
 # 3. 資料庫 ORM 模型 (MODELS)
 # =====================================================================
@@ -166,6 +181,15 @@ class Product(Base):
     brand = Column(String, nullable=True)
     cp_index = Column(Float, nullable=False, default=1.0)
     cp_label = Column(String, nullable=True, default="合理")
+    model_name = Column(String, nullable=True, index=True)
+
+class ModelMapping(Base):
+    """車款名稱對照與合併規則表"""
+    __tablename__ = "model_mappings"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    raw_name = Column(String, unique=True, nullable=False, index=True) # 原始車名 (清理後的標題)
+    mapped_name = Column(String, nullable=False, index=True) # 合併後的統一車款名稱
 
 class ScrapeLog(Base):
     """爬蟲歷史日誌表"""
@@ -196,6 +220,14 @@ class ProductResponse(BaseModel):
     brand: Optional[str] = None
     cp_index: float
     cp_label: Optional[str] = None
+    model_name: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+class ModelMappingResponse(BaseModel):
+    id: int
+    raw_name: str
+    mapped_name: str
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -747,12 +779,10 @@ def get_model_summary(db_products: List[Any]) -> pd.DataFrame:
 
     data = []
     for p in db_products:
-        clean_title = p.title
-        clean_title = re.sub(r'[【\[](.*?)[】\]]', '', clean_title).strip()
-        clean_title = re.sub(r'#\s*\d+', '', clean_title).strip()
+        model_name = p.model_name or get_cleaned_title(p.title)
         
         data.append({
-            "title": clean_title,
+            "title": model_name,
             "brand": p.brand or "未知廠牌",
             "price": p.current_price,
             "mileage": p.mileage,
@@ -1010,8 +1040,23 @@ def trigger_crawl_endpoint(max_pages: Optional[int] = None, quick: bool = False,
 
         # 批次寫入資料庫
         db.query(Product).delete()
-        db_products = [
-            Product(
+        
+        # 讀取並緩存現有的對照規則，提高插入效能
+        existing_mappings = {m.raw_name: m.mapped_name for m in db.query(ModelMapping).all()}
+        
+        db_products = []
+        for item in processed_data:
+            cleaned = get_cleaned_title(item["title"])
+            if cleaned in existing_mappings:
+                m_name = existing_mappings[cleaned]
+            else:
+                # 自動建立對照項
+                new_map = ModelMapping(raw_name=cleaned, mapped_name=cleaned)
+                db.add(new_map)
+                existing_mappings[cleaned] = cleaned # 更新緩存防止同一次批次內重複加入
+                m_name = cleaned
+                
+            db_products.append(Product(
                 title=item["title"], 
                 url=item["url"], 
                 img_url=item["img_url"],
@@ -1024,9 +1069,9 @@ def trigger_crawl_endpoint(max_pages: Optional[int] = None, quick: bool = False,
                 displacement=item.get("displacement", 0),
                 brand=item.get("brand", "其他"),
                 cp_index=item.get("cp_index", 1.0),
-                cp_label=item.get("cp_label", "合理")
-            ) for item in processed_data
-        ]
+                cp_label=item.get("cp_label", "合理"),
+                model_name=m_name
+            ))
         db.add_all(db_products)
         
         log_entry = ScrapeLog(status="SUCCESS", products_count=len(db_products), message="成功更新資料庫並完成 CP 值分析")
@@ -1134,6 +1179,73 @@ def get_html_report_endpoint():
         filename="report.html"
     )
 
+@app.get("/api/v1/mappings", response_model=List[ModelMappingResponse])
+def list_mappings_endpoint(db: Session = Depends(get_db)):
+    return db.query(ModelMapping).order_by(ModelMapping.raw_name).all()
+
+class MappingUpdateRequest(BaseModel):
+    raw_name: str
+    mapped_name: str
+
+@app.post("/api/v1/mappings/update")
+def update_mapping_endpoint(payload: MappingUpdateRequest, db: Session = Depends(get_db)):
+    # 尋找對應的規則
+    mapping = db.query(ModelMapping).filter_by(raw_name=payload.raw_name).first()
+    if not mapping:
+        mapping = ModelMapping(raw_name=payload.raw_name, mapped_name=payload.mapped_name)
+        db.add(mapping)
+    else:
+        mapping.mapped_name = payload.mapped_name
+    db.commit()
+
+    # 自動同步更新 Product 資料表中所有符合 raw_name 的車款的 model_name
+    products = db.query(Product).all()
+    updated_count = 0
+    for p in products:
+        if get_cleaned_title(p.title) == payload.raw_name:
+            p.model_name = payload.mapped_name
+            updated_count += 1
+    db.commit()
+
+    # 如果有商品被更新，重新計算 CP 值分組、生成圖表與報表
+    if updated_count > 0:
+        try:
+            # 重新計算 CP 值分組
+            items = []
+            for p in products:
+                items.append({
+                    "title": p.title,
+                    "url": p.url,
+                    "img_url": p.img_url,
+                    "original_price": p.original_price,
+                    "current_price": p.current_price,
+                    "discount_rate": p.discount_rate,
+                    "year": p.year,
+                    "mileage": p.mileage,
+                    "location": p.location,
+                    "displacement": p.displacement,
+                    "brand": p.brand
+                })
+            processed = calculate_cp_values(items)
+            for idx, p in enumerate(products):
+                p.cp_index = processed[idx].get("cp_index", 1.0)
+                p.cp_label = processed[idx].get("cp_label", "合理")
+            db.commit()
+
+            # 重新產生圖表與報表
+            generate_charts(products)
+            reports_dir = os.path.join(STATIC_DIR, "reports")
+            excel_data = generate_excel_report_data(products)
+            with open(os.path.join(reports_dir, "report.xlsx"), "wb") as f:
+                f.write(excel_data)
+            html_data = generate_html_report_data(products)
+            with open(os.path.join(reports_dir, "report.html"), "w", encoding="utf-8") as f:
+                f.write(html_data)
+        except Exception as regen_err:
+            logger.error(f"更新對照後重新產生報表與 CP 計算失敗: {regen_err}")
+
+    return {"status": "success", "updated_count": updated_count}
+
 @app.get("/api/v1/logs", response_model=List[ScrapeLogResponse])
 def get_logs_endpoint(db: Session = Depends(get_db)):
     return db.query(ScrapeLog).order_by(ScrapeLog.timestamp.desc()).limit(20).all()
@@ -1147,14 +1259,59 @@ try:
     inspector = inspect(engine)
     if "products" in inspector.get_table_names():
         columns = [col["name"] for col in inspector.get_columns("products")]
-        required_cols = {"year", "mileage", "location", "displacement", "brand", "cp_index", "cp_label"}
+        required_cols = {"year", "mileage", "location", "displacement", "brand", "cp_index", "cp_label", "model_name"}
         if not required_cols.issubset(set(columns)):
-            logger.info("檢測到舊版資料庫 Schema，正在重建資料表以支援完整大數據分析欄位...")
+            logger.info("檢測到舊版資料庫 Schema，正在重建資料表以支援完整大數據分析欄位與車款合併欄位...")
             Base.metadata.drop_all(bind=engine)
 except Exception as e:
     logger.error(f"資料庫結構檢查與遷移失敗: {e}")
 
 Base.metadata.create_all(bind=engine)
+
+# 自癒性 Seeding 對照表與更新車款名稱
+try:
+    db = SessionLocal()
+    
+    # 1. 檢查並寫入預設對照規則
+    default_rules = {
+        "GOGORO VIVA MIX BELT(皮帶版)": "GOGORO VIVA MIX BELT",
+        "GOGORO VIVA MIX BELT": "GOGORO VIVA MIX BELT",
+        "GOGORO VIVA MIX KEYLESS": "GOGORO VIVA MIX KEYLESS",
+        "GOGORO VIVA KEYLESS 雙碟": "GOGORO VIVA KEYLESS",
+        "GOGORO VIVA 鑰匙版": "GOGORO VIVA KEY",
+        "GOGORO VIVA XL": "GOGORO VIVA XL",
+    }
+    
+    mappings_count = db.query(ModelMapping).count()
+    if mappings_count == 0:
+        logger.info("檢測到對照表為空，正在寫入預設對照規則...")
+        for raw, mapped in default_rules.items():
+            db.add(ModelMapping(raw_name=raw, mapped_name=mapped))
+        db.commit()
+        logger.info("寫入預設對照規則完成！")
+        
+    # 2. 自動為所有已存在的 Product 車款更新 model_name
+    products_without_model = db.query(Product).filter((Product.model_name == None) | (Product.model_name == "")).all()
+    if products_without_model:
+        logger.info(f"發現 {len(products_without_model)} 筆資料未設定車款名稱，開始自動比對與設定...")
+        for p in products_without_model:
+            cleaned = get_cleaned_title(p.title)
+            # 尋找是否有對應的 mapping
+            mapping = db.query(ModelMapping).filter_by(raw_name=cleaned).first()
+            if mapping:
+                p.model_name = mapping.mapped_name
+            else:
+                # 自癒性：自動建立無對照的新對照項目
+                new_map = ModelMapping(raw_name=cleaned, mapped_name=cleaned)
+                db.add(new_map)
+                db.commit() # Commit to make it available for search next time
+                p.model_name = cleaned
+        db.commit()
+        logger.info("自動比對與設定車款名稱完成！")
+except Exception as mapping_err:
+    logger.error(f"啟動時對照表自癒或更新車款名稱失敗: {mapping_err}")
+finally:
+    db.close()
 
 # 自癒性報表生成 (如果資料庫已有數據，自動預先產出 Excel 與 HTML 報表)
 try:
