@@ -88,10 +88,60 @@ export default function Home() {
 
   // Filter States
   const [brandFilter, setBrandFilter] = useState('全部');
+  const [modelFilter, setModelFilter] = useState('全部');
   const [locationFilter, setLocationFilter] = useState('全部');
   const [kwFilter, setKwFilter] = useState('');
   const [priceMaxFilter, setPriceMaxFilter] = useState('');
   const [mileMaxFilter, setMileMaxFilter] = useState('');
+
+  // Extract unique model names dynamically based on selected brand filter
+  const getAvailableModels = () => {
+    let filteredForModels = products;
+    if (brandFilter !== '全部') {
+      filteredForModels = products.filter(p => p.brand === brandFilter);
+    }
+    const modelNames = filteredForModels.map(p => getModelName(p.title)).filter(Boolean);
+    return ['全部', ...Array.from(new Set(modelNames))].sort((a, b) => a.localeCompare(b));
+  };
+
+  // Get model statistics for model analysis
+  const getModelAnalysis = () => {
+    if (products.length === 0) return [];
+    
+    // Group products by model name
+    const groups = {};
+    products.forEach(p => {
+      const model = getModelName(p.title);
+      if (!groups[model]) {
+        groups[model] = {
+          model: model,
+          count: 0,
+          prices: [],
+          mileages: [],
+          brand: p.brand || '其他'
+        };
+      }
+      groups[model].count += 1;
+      groups[model].prices.push(p.current_price || 0);
+      groups[model].mileages.push(p.mileage || 0);
+    });
+    
+    // Calculate statistics
+    const stats = Object.values(groups).map(g => {
+      const avgPrice = g.prices.reduce((sum, p) => sum + p, 0) / g.prices.length;
+      const avgMileage = g.mileages.reduce((sum, m) => sum + m, 0) / g.mileages.length;
+      return {
+        model: g.model,
+        brand: g.brand,
+        count: g.count,
+        avgPrice: Math.round(avgPrice),
+        avgMileage: Math.round(avgMileage)
+      };
+    });
+    
+    // Sort by count descending (most popular models)
+    return stats.sort((a, b) => b.count - a.count).slice(0, 5);
+  };
 
   // Selection & Compare
   const [selectedBikes, setSelectedBikes] = useState([]);
@@ -243,6 +293,7 @@ export default function Home() {
   // Filters & Sorting logic
   const filteredProducts = products.filter(p => {
     if (brandFilter !== '全部' && p.brand !== brandFilter) return false;
+    if (modelFilter !== '全部' && getModelName(p.title) !== modelFilter) return false;
     if (locationFilter !== '全部') {
       const bShort = cleanLocName(locationFilter);
       const pLoc = cleanLocName(p.location || '');
@@ -461,6 +512,39 @@ export default function Home() {
                   </div>
                 ))}
               </div>
+            {/* Model Analysis Section */}
+            {products.length > 0 && (
+              <div className="bg-[#1e1e24] p-5 rounded-xl border border-[#30363d] shadow-lg">
+                <h2 className="text-lg font-bold text-[#00adb5] mb-4 flex items-center gap-2">
+                  📊 熱門機車車款市佔與行情分析 (在庫量 Top 5)
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                  {getModelAnalysis().map((m, idx) => (
+                    <div key={idx} className="bg-[#121214] p-4 rounded-lg border border-[#30363d] space-y-2 relative overflow-hidden">
+                      <div className="absolute top-0 left-0 h-1 w-full bg-[#00adb5]"></div>
+                      <div className="flex justify-between items-start">
+                        <span className="text-xs font-semibold bg-[#00adb5] bg-opacity-20 text-[#00adb5] px-2 py-0.5 rounded">
+                          {m.brand}
+                        </span>
+                        <span className="text-xs text-[#b2bec3]">在庫: <strong className="text-white">{m.count} 輛</strong></span>
+                      </div>
+                      <h4 className="font-bold text-sm text-[#eeeeee] truncate" title={m.model}>
+                        {m.model}
+                      </h4>
+                      <div className="pt-2 text-xs space-y-1 border-t border-[#30363d] text-[#b2bec3]">
+                        <div className="flex justify-between">
+                          <span>均價:</span>
+                          <span className="font-bold text-[#e67e22]">NT$ {m.avgPrice.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>均里程:</span>
+                          <span className="font-semibold text-white">{m.avgMileage.toLocaleString()} km</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
 
             {/* Top 10 Tables Grid */}
@@ -574,15 +658,29 @@ export default function Home() {
             {/* Filter Panel */}
             <div className="bg-[#1e1e24] p-5 rounded-xl border border-[#30363d] shadow-md">
               <h3 className="text-sm font-bold text-[#00adb5] mb-4">🔧 進階車源條件篩選</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4 items-end">
                 <div>
                   <label className="text-xs text-[#b2bec3] block mb-2">廠牌品牌</label>
                   <select
                     value={brandFilter}
-                    onChange={e => setBrandFilter(e.target.value)}
+                    onChange={e => {
+                      setBrandFilter(e.target.value);
+                      setModelFilter('全部');
+                    }}
                     className="w-full bg-[#121214] border border-[#30363d] rounded-lg p-2 text-sm text-[#eeeeee] focus:border-[#00adb5]"
                   >
                     {brands.map((b, i) => <option key={i} value={b}>{b}</option>)}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs text-[#b2bec3] block mb-2">機車車款</label>
+                  <select
+                    value={modelFilter}
+                    onChange={e => setModelFilter(e.target.value)}
+                    className="w-full bg-[#121214] border border-[#30363d] rounded-lg p-2 text-sm text-[#eeeeee] focus:border-[#00adb5]"
+                  >
+                    {getAvailableModels().map((m, i) => <option key={i} value={m}>{m}</option>)}
                   </select>
                 </div>
 
@@ -1081,4 +1179,17 @@ export default function Home() {
 function intVal(val) {
   if (val === undefined || val === null) return 0;
   return Math.round(Number(val));
+}
+
+function getModelName(title) {
+  if (!title) return "";
+  let clean = title;
+  // Remove branch e.g. 【新北樹林店】
+  clean = clean.replace(/[【\[].*?[】\]]/g, "");
+  // Remove year e.g. 2019
+  clean = clean.replace(/\b(19|20)\d{2}\b/g, "");
+  // Remove identifier e.g. #8929
+  clean = clean.replace(/#\s*\d+/g, "");
+  // Remove extra spaces
+  return clean.replace(/\s+/g, ' ').trim();
 }
