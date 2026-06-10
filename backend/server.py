@@ -95,6 +95,18 @@ else:
     # 支援 Vercel 唯讀環境下的 SQLite 寫入
     if os.getenv("VERCEL") == "1":
         db_path = "/tmp/local_dev.db"
+        # 自癒性 Seeding：如果臨時資料庫不存在或大小為 0，且專案中有種子資料庫，則自動複製過去
+        repo_db = os.path.join(PROJECT_ROOT, "db", "local_dev.db")
+        if not os.path.exists(db_path) or os.path.getsize(db_path) == 0:
+            if os.path.exists(repo_db) and os.path.getsize(repo_db) > 0:
+                import shutil
+                try:
+                    logger.info("檢測到 Vercel/本地臨時資料庫未初始化，正在複製專案種子數據...")
+                    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+                    shutil.copy(repo_db, db_path)
+                    logger.info("複製種子數據完成！")
+                except Exception as copy_err:
+                    logger.error(f"複製種子數據失敗: {copy_err}")
         DATABASE_URL = f"sqlite:///{db_path}"
     else:
         # 本地端預設 SQLite，移至專案根目錄的 db/ 資料夾中，避免檔案散落
