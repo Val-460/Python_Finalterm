@@ -1442,12 +1442,50 @@ function getModelName(pOrTitle) {
   }
   if (!pOrTitle) return "";
   let clean = pOrTitle;
-  // Remove branch e.g. 【新北樹林店】
-  clean = clean.replace(/[【\[].*?[】\]]/g, "");
-  // Remove year e.g. 2019
-  clean = clean.replace(/\b(19|20)\d{2}\b/g, "");
-  // Remove identifier e.g. #8929
-  clean = clean.replace(/#\s*\d+/g, "");
-  // Remove extra spaces
+  
+  // 1. Remove branch e.g. 【新北樹林店】
+  clean = clean.replace(/[【\[].*?[】\]]/g, " ");
+  // 2. Remove year e.g. 2019
+  clean = clean.replace(/\b(19|20)\d{2}\b/g, " ");
+  // 3. Remove identifier e.g. #8929
+  clean = clean.replace(/#\s*\d+/g, " ");
+  // 4. Remove all parentheses and their contents, e.g. (碟煞), （皮帶版）
+  clean = clean.replace(/[\(（].*?[\)）]/g, " ");
+  
+  // 5. Remove brand prefixes (case-insensitive)
+  const brandWords = [
+    "山葉", "yamaha", "yamah", 
+    "三陽", "sym", 
+    "光陽", "kymco", 
+    "摩特動力", "pgo", 
+    "鈴木", "suzuki", "台鈴", 
+    "本田", "honda", 
+    "偉士牌", "vespa", 
+    "宏佳騰", "aeon", 
+    "睿能", "gogoro", 
+    "川崎", "kawasaki"
+  ];
+  brandWords.forEach(word => {
+    const escaped = word.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const regex = new RegExp(escaped, 'gi');
+    clean = clean.replace(regex, " ");
+  });
+
+  // 6. Recursively remove specs/cc from suffix
+  const specRegex = /\s*(?:ABS|TCS|KEYLESS|CBS|UBS|雙碟|單碟|碟煞|鼓煞|特仕|精裝|跑車|皮帶|鍊條|鑰匙|仕樣|化油|噴射)+(?:版|款|型|版本)?\s*$/gi;
+  const ccRegex = /\s*\b(?:125|158|110|150|100|115|120|180|200|250|300|350|400)\s*(?:cc|CC)?\b\s*$/gi;
+  
+  while (true) {
+    clean = clean.replace(/\s+/g, ' ').trim();
+    const originalLen = clean.length;
+    clean = clean.replace(specRegex, " ");
+    clean = clean.replace(ccRegex, " ");
+    clean = clean.replace(/\s+/g, ' ').trim();
+    if (clean.length === originalLen) {
+      break;
+    }
+  }
+
   return clean.replace(/\s+/g, ' ').trim();
 }
+
