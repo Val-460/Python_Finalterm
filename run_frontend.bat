@@ -18,7 +18,13 @@ exit /b 1
 :has_req
 
 set "PY_CMD=python"
-if exist "C:\Users\LINia\AppData\Local\Python\pythoncore-3.14-64\python.exe" (
+if exist "%USERPROFILE%\AppData\Local\Programs\Python\Python311\python.exe" (
+    set "PY_CMD=%USERPROFILE%\AppData\Local\Programs\Python\Python311\python.exe"
+) else if exist "%USERPROFILE%\AppData\Local\Programs\Python\Python312\python.exe" (
+    set "PY_CMD=%USERPROFILE%\AppData\Local\Programs\Python\Python312\python.exe"
+) else if exist "%USERPROFILE%\AppData\Local\Programs\Python\Python310\python.exe" (
+    set "PY_CMD=%USERPROFILE%\AppData\Local\Programs\Python\Python310\python.exe"
+) else if exist "C:\Users\LINia\AppData\Local\Python\pythoncore-3.14-64\python.exe" (
     set "PY_CMD=C:\Users\LINia\AppData\Local\Python\pythoncore-3.14-64\python.exe"
 )
 echo Using Python path: %PY_CMD% >> "%LOG_FILE%"

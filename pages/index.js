@@ -203,61 +203,54 @@ export default function Home() {
     setError('');
     setDataLoading(true);
     setDataLoadingProgress(0);
-    setDataLoadingStatus('正在初始化載入程序...');
-    
-    let currentProgress = 0;
-    
-    // Smooth progress animation helper
-    const animateTo = (target, duration = 400) => {
-      return new Promise((resolve) => {
-        const start = currentProgress;
-        const startTime = performance.now();
-        const step = (now) => {
-          const elapsed = now - startTime;
-          const pct = Math.min(1, elapsed / duration);
-          currentProgress = Math.round(start + (target - start) * pct);
-          setDataLoadingProgress(currentProgress);
-          if (pct < 1) {
-            requestAnimationFrame(step);
-          } else {
-            resolve();
-          }
-        };
-        requestAnimationFrame(step);
-      });
+    setDataLoadingStatus('正在並行載入大數據分析項目...');
+
+    let completedTasks = 0;
+    const totalTasks = 3;
+
+    const updateProgress = (statusText) => {
+      completedTasks += 1;
+      setDataLoadingProgress(Math.round((completedTasks / totalTasks) * 100));
+      setDataLoadingStatus(statusText);
     };
 
     try {
-      // Step 1: Loading Products list
-      setDataLoadingStatus('正在從資料庫載入機車商品清單...');
-      await animateTo(20, 200);
-      const pResp = await fetch('/api/v1/products');
-      if (!pResp.ok) throw new Error("尚未爬取商品資料，請點擊上方按鈕執行大數據爬蟲");
-      const pData = await pResp.json();
-      setProducts(pData);
-      await animateTo(45, 300);
+      // 1. 載入商品列表任務
+      const fetchProducts = async () => {
+        const pResp = await fetch('/api/v1/products');
+        if (!pResp.ok) throw new Error("尚未爬取商品資料，請執行大數據爬蟲");
+        const pData = await pResp.json();
+        setProducts(pData);
+        updateProgress('成功載入機車商品清單！');
+        return pData;
+      };
 
-      // Step 2: Loading Analysis Summary
-      setDataLoadingStatus('已載入商品清單，正在載入 CP 值大數據統計與分析指標...');
-      const aResp = await fetch('/api/v1/analysis');
-      if (aResp.ok) {
+      // 2. 載入 CP 分析中位數任務
+      const fetchAnalysis = async () => {
+        const aResp = await fetch('/api/v1/analysis');
+        if (!aResp.ok) throw new Error("無法獲取市場分析數據");
         const aData = await aResp.json();
         setAnalysis(aData);
-      }
-      await animateTo(70, 300);
+        updateProgress('成功計算 CP 值大數據統計指標！');
+        return aData;
+      };
 
-      // Step 3: Loading charts
-      setDataLoadingStatus('已載入分析統計，正在生成並載入市場統計圖表...');
-      const cResp = await fetch('/api/v1/analysis/charts', { method: 'POST' });
-      if (cResp.ok) {
+      // 3. 載入行情統計圖表任務
+      const fetchCharts = async () => {
+        const cResp = await fetch('/api/v1/analysis/charts', { method: 'POST' });
+        if (!cResp.ok) throw new Error("無法生成市場行情分析圖表");
         const cData = await cResp.json();
         setCharts(cData);
-      }
-      await animateTo(100, 400);
-      setDataLoadingStatus('資料載入成功！');
-      
-      // Let user see 100% complete briefly
-      await new Promise(resolve => setTimeout(resolve, 600));
+        updateProgress('成功生成並渲染行情統計圖表！');
+        return cData;
+      };
+
+      // 並行執行三個請求，極速加載
+      await Promise.all([fetchProducts(), fetchAnalysis(), fetchCharts()]);
+
+      setDataLoadingStatus('所有資料載入與 UI 渲染成功！');
+      // 確保 100% 進度條動畫渲染完成後才關閉遮罩，防止閃爍
+      await new Promise(resolve => setTimeout(resolve, 350));
     } catch (err) {
       setError(err.message);
       logErrorToBackend(err, "loadData");
@@ -268,11 +261,12 @@ export default function Home() {
     }
   };
 
-  const startCrawl = async () => {
+  const startCrawl = async (quick = false) => {
     setCrawling(true);
     setError('');
     try {
-      const resp = await fetch('/api/v1/crawl', { method: 'POST' });
+      const url = quick ? '/api/v1/crawl?quick=true' : '/api/v1/crawl';
+      const resp = await fetch(url, { method: 'POST' });
       const data = await resp.json();
       if (resp.ok && data.status === 'success') {
         loadData();
@@ -478,12 +472,20 @@ export default function Home() {
                 </div>
               </div>
             ) : (
-              <button
-                onClick={startCrawl}
-                className="bg-[#27ae60] hover:bg-[#2ecc71] text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-md"
-              >
-                🚀 執行大數據爬蟲
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => startCrawl(true)}
+                  className="bg-[#e74c3c] hover:bg-[#c0392b] text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-md flex items-center gap-1"
+                >
+                  ⚡ 快速大數據爬蟲
+                </button>
+                <button
+                  onClick={() => startCrawl(false)}
+                  className="bg-[#27ae60] hover:bg-[#2ecc71] text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-md flex items-center gap-1"
+                >
+                  🚀 執行完整大數據爬蟲
+                </button>
+              </div>
             )}
 
             <button
@@ -543,7 +545,7 @@ export default function Home() {
                   { title: "在售車輛總數", val: `${analysis.total_count} 輛`, color: "#00adb5" },
                   { title: "市場平均車價", val: `NT$ ${intVal(analysis.avg_current_price).toLocaleString()}`, color: "#58a6ff" },
                   { title: "市場平均里程", val: `${intVal(analysis.avg_mileage).toLocaleString()} km`, color: "#f59e0b" },
-                  { title: "超值車源比例", val: `${(analysis.value_choices_count / analysis.total_count * 100).toFixed(1)}%`, color: "#2ecc71" }
+                  { title: "超值車源比例", val: `${analysis.total_count > 0 ? (analysis.value_choices_count / analysis.total_count * 100).toFixed(1) : "0.0"}%`, color: "#2ecc71" }
                 ].map((card, idx) => (
                   <div key={idx} className="bg-[#1e1e24] p-5 rounded-xl border border-[#30363d] shadow-md relative overflow-hidden">
                     <div className="absolute top-0 left-0 h-1 w-full" style={{ backgroundColor: card.color }}></div>
@@ -588,109 +590,146 @@ export default function Home() {
               </div>
             )}
 
-            {/* Top 10 Tables Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* CP Top 10 */}
-              <div className="bg-[#1e1e24] p-5 rounded-xl border border-[#30363d] shadow-lg hover:border-[#2ecc71] transition-all duration-300">
-                <h2 className="text-lg font-bold text-[#2ecc71] mb-4 flex items-center gap-2">
-                  🔥 全網性價比超值神車榜 Top 10 (越高越划算)
-                </h2>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs text-left text-[#eeeeee]">
-                    <thead>
-                      <tr className="border-b border-[#30363d] text-[#b2bec3] bg-[#121214]">
-                        <th className="p-3">圖片</th>
-                        <th className="p-3">車款名稱</th>
-                        <th className="p-3">年份</th>
-                        <th className="p-3 text-right">里程 (km)</th>
-                        <th className="p-3 text-right">價格 (元)</th>
-                        <th className="p-3 text-center">CP指數</th>
-                        <th className="p-3 text-center">標籤</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {products
-                        .sort((a, b) => b.cp_index - a.cp_index)
-                        .slice(0, 10)
-                        .map((p, idx) => (
-                          <tr key={idx} className="border-b border-[#30363d] hover:bg-[#21262d] transition-all">
-                            <td className="p-2">
-                              {p.img_url ? (
-                                <img src={p.img_url} alt={p.title} className="h-8 w-12 object-cover rounded border border-[#30363d]" />
-                              ) : (
-                                <div className="h-8 w-12 bg-[#121214] rounded border border-[#30363d] flex items-center justify-center text-[10px] text-[#555]">🏍️</div>
-                              )}
-                            </td>
-                            <td className="p-3 font-semibold truncate max-w-[150px]">
-                              <a href={p.url} target="_blank" className="hover:underline text-[#58a6ff]">
-                                {p.title}
-                              </a>
-                            </td>
-                            <td className="p-3">{p.year}</td>
-                            <td className="p-3 text-right">{intVal(p.mileage).toLocaleString()}</td>
-                            <td className="p-3 text-right font-bold text-[#e67e22]">{intVal(p.current_price).toLocaleString()}</td>
-                            <td className="p-3 text-center font-bold text-[#2ecc71]">{p.cp_index.toFixed(2)}</td>
-                            <td className="p-3 text-center">
-                              <span className="bg-[#2ecc71] text-white px-2 py-0.5 rounded text-[10px] font-bold">超值</span>
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
+            {/* Empty State Warning */}
+            {products.length === 0 && (
+              <div className="bg-[#1e1e24] p-10 rounded-xl border border-[#30363d] text-center space-y-4 shadow-lg">
+                <span className="text-5xl block animate-pulse">🏍️</span>
+                <h3 className="text-lg font-bold text-white">尚未載入任何二手機車數據</h3>
+                <p className="text-sm text-[#b2bec3] max-w-lg mx-auto leading-relaxed">
+                  本地資料庫目前沒有數據，因此無法進行行情與 CP 值分析。<br/>
+                  請點擊右上角的 <strong>🚀 執行大數據爬蟲</strong> 開始爬取最新的二手車源資訊；<br/>
+                  或者，如果您已經在本地運行了後端，請點擊 <strong>📊 載入數據</strong> 從資料庫重新載入。
+                </p>
+                <div className="pt-2 flex justify-center gap-4 flex-wrap">
+                  <button
+                    onClick={() => startCrawl(true)}
+                    disabled={crawling}
+                    className="bg-[#e74c3c] hover:bg-[#c0392b] text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-md flex items-center gap-2"
+                  >
+                    ⚡ 快速大數據爬蟲
+                  </button>
+                  <button
+                    onClick={() => startCrawl(false)}
+                    disabled={crawling}
+                    className="bg-[#27ae60] hover:bg-[#2ecc71] text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-md flex items-center gap-2"
+                  >
+                    🚀 執行完整大數據爬蟲
+                  </button>
+                  <button
+                    onClick={loadData}
+                    className="bg-[#e67e22] hover:bg-[#f39c12] text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-md flex items-center gap-2"
+                  >
+                    📊 載入數據
+                  </button>
                 </div>
               </div>
+            )}
 
-              {/* Low Mileage Top 10 */}
-              <div className="bg-[#1e1e24] p-5 rounded-xl border border-[#30363d] shadow-lg hover:border-[#58a6ff] transition-all duration-300">
-                <h2 className="text-lg font-bold text-[#58a6ff] mb-4 flex items-center gap-2">
-                  🏍️ 全網低里程優質精選 Top 10
-                </h2>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs text-left text-[#eeeeee]">
-                    <thead>
-                      <tr className="border-b border-[#30363d] text-[#b2bec3] bg-[#121214]">
-                        <th className="p-3">圖片</th>
-                        <th className="p-3">車款名稱</th>
-                        <th className="p-3">年份</th>
-                        <th className="p-3 text-right">里程 (km)</th>
-                        <th className="p-3 text-right">價格 (元)</th>
-                        <th className="p-3 text-center">CP指數</th>
-                        <th className="p-3 text-center">標籤</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {products
-                        .sort((a, b) => a.mileage - b.mileage)
-                        .slice(0, 10)
-                        .map((p, idx) => (
-                          <tr key={idx} className="border-b border-[#30363d] hover:bg-[#21262d] transition-all">
-                            <td className="p-2">
-                              {p.img_url ? (
-                                <img src={p.img_url} alt={p.title} className="h-8 w-12 object-cover rounded border border-[#30363d]" />
-                              ) : (
-                                <div className="h-8 w-12 bg-[#121214] rounded border border-[#30363d] flex items-center justify-center text-[10px] text-[#555]">🏍️</div>
-                              )}
-                            </td>
-                            <td className="p-3 font-semibold truncate max-w-[150px]">
-                              <a href={p.url} target="_blank" className="hover:underline text-[#58a6ff]">
-                                {p.title}
-                              </a>
-                            </td>
-                            <td className="p-3">{p.year}</td>
-                            <td className="p-3 text-right font-bold text-[#58a6ff]">{intVal(p.mileage).toLocaleString()}</td>
-                            <td className="p-3 text-right text-[#e67e22]">{intVal(p.current_price).toLocaleString()}</td>
-                            <td className="p-3 text-center">{p.cp_index.toFixed(2)}</td>
-                            <td className="p-3 text-center">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold text-white ${p.cp_label === '超值' ? 'bg-[#2ecc71]' : p.cp_label === '合理' ? 'bg-[#3498db]' : 'bg-[#e74c3c]'
-                                }`}>{p.cp_label}</span>
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
+            {/* Top 10 Tables Grid */}
+            {products.length > 0 && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* CP Top 10 */}
+                <div className="bg-[#1e1e24] p-5 rounded-xl border border-[#30363d] shadow-lg hover:border-[#2ecc71] transition-all duration-300">
+                  <h2 className="text-lg font-bold text-[#2ecc71] mb-4 flex items-center gap-2">
+                    🔥 全網性價比超值神車榜 Top 10 (越高越划算)
+                  </h2>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left text-[#eeeeee]">
+                      <thead>
+                        <tr className="border-b border-[#30363d] text-[#b2bec3] bg-[#121214]">
+                          <th className="p-3">圖片</th>
+                          <th className="p-3">車款名稱</th>
+                          <th className="p-3">年份</th>
+                          <th className="p-3 text-right">里程 (km)</th>
+                          <th className="p-3 text-right">價格 (元)</th>
+                          <th className="p-3 text-center">CP指數</th>
+                          <th className="p-3 text-center">標籤</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {products
+                          .sort((a, b) => b.cp_index - a.cp_index)
+                          .slice(0, 10)
+                          .map((p, idx) => (
+                            <tr key={idx} className="border-b border-[#30363d] hover:bg-[#21262d] transition-all">
+                              <td className="p-2">
+                                {p.img_url ? (
+                                  <img src={p.img_url} alt={p.title} className="h-8 w-12 object-cover rounded border border-[#30363d]" />
+                                ) : (
+                                  <div className="h-8 w-12 bg-[#121214] rounded border border-[#30363d] flex items-center justify-center text-[10px] text-[#555]">🏍️</div>
+                                )}
+                              </td>
+                              <td className="p-3 font-semibold truncate max-w-[150px]">
+                                <a href={p.url} target="_blank" className="hover:underline text-[#58a6ff]">
+                                  {p.title}
+                                </a>
+                              </td>
+                              <td className="p-3">{p.year}</td>
+                              <td className="p-3 text-right">{intVal(p.mileage).toLocaleString()}</td>
+                              <td className="p-3 text-right font-bold text-[#e67e22]">{intVal(p.current_price).toLocaleString()}</td>
+                              <td className="p-3 text-center font-bold text-[#2ecc71]">{p.cp_index.toFixed(2)}</td>
+                              <td className="p-3 text-center">
+                                <span className="bg-[#2ecc71] text-white px-2 py-0.5 rounded text-[10px] font-bold">超值</span>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Low Mileage Top 10 */}
+                <div className="bg-[#1e1e24] p-5 rounded-xl border border-[#30363d] shadow-lg hover:border-[#58a6ff] transition-all duration-300">
+                  <h2 className="text-lg font-bold text-[#58a6ff] mb-4 flex items-center gap-2">
+                    🏍️ 全網低里程優質精選 Top 10
+                  </h2>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left text-[#eeeeee]">
+                      <thead>
+                        <tr className="border-b border-[#30363d] text-[#b2bec3] bg-[#121214]">
+                          <th className="p-3">圖片</th>
+                          <th className="p-3">車款名稱</th>
+                          <th className="p-3">年份</th>
+                          <th className="p-3 text-right">里程 (km)</th>
+                          <th className="p-3 text-right">價格 (元)</th>
+                          <th className="p-3 text-center">CP指數</th>
+                          <th className="p-3 text-center">標籤</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {products
+                          .sort((a, b) => a.mileage - b.mileage)
+                          .slice(0, 10)
+                          .map((p, idx) => (
+                            <tr key={idx} className="border-b border-[#30363d] hover:bg-[#21262d] transition-all">
+                              <td className="p-2">
+                                {p.img_url ? (
+                                  <img src={p.img_url} alt={p.title} className="h-8 w-12 object-cover rounded border border-[#30363d]" />
+                                ) : (
+                                  <div className="h-8 w-12 bg-[#121214] rounded border border-[#30363d] flex items-center justify-center text-[10px] text-[#555]">🏍️</div>
+                                )}
+                              </td>
+                              <td className="p-3 font-semibold truncate max-w-[150px]">
+                                <a href={p.url} target="_blank" className="hover:underline text-[#58a6ff]">
+                                  {p.title}
+                                </a>
+                              </td>
+                              <td className="p-3">{p.year}</td>
+                              <td className="p-3 text-right font-bold text-[#58a6ff]">{intVal(p.mileage).toLocaleString()}</td>
+                              <td className="p-3 text-right text-[#e67e22]">{intVal(p.current_price).toLocaleString()}</td>
+                              <td className="p-3 text-center">{p.cp_index.toFixed(2)}</td>
+                              <td className="p-3 text-center">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold text-white ${p.cp_label === '超值' ? 'bg-[#2ecc71]' : p.cp_label === '合理' ? 'bg-[#3498db]' : 'bg-[#e74c3c]'
+                                  }`}>{p.cp_label}</span>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 
