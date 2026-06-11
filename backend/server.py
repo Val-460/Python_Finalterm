@@ -410,19 +410,28 @@ def parse_info_from_text(title: str, text: str) -> dict:
         res["year"] = int(year_match.group(1))
         clean_title = clean_title.replace(year_match.group(0), "")
 
-    # 3. 品牌解析
+    # 3. 品牌解析 (加上各品牌的常見車系特徵，以應付標題省略品牌名稱的情況)
     brand_map = {
-        "山葉": ["山葉", "YAMAHA", "yamaha", "yamah"],
-        "三陽": ["三陽", "SYM", "sym"],
-        "光陽": ["光陽", "KYMCO", "kymco"],
-        "摩特動力": ["PGO", "pgo", "摩特動力"],
-        "鈴木": ["SUZUKI", "suzuki", "鈴木", "台鈴"],
-        "本田": ["HONDA", "honda", "本田"],
-        "偉士牌": ["VESPA", "vespa", "偉士牌"],
-        "宏佳騰": ["宏佳騰", "AEON", "aeon"],
-        "睿能": ["GOGORO", "gogoro", "睿能"],
-        "川崎": ["KAWASAKI", "kawasaki", "川崎"]
+        "山葉": ["山葉", "YAMAHA", "yamah", "勁戰", "CYGNUS", "FORCE", "SMAX", "JOG", "BWS", "VINOORA", "小小兵", "LIMI", "RS NEO", "RS ZERO", "AUGUR", "MT-15", "MT-03", "MT-07", "MT-09", "R15", "R3", "R7", "XMAX", "TMAX", "NMAX", "TRICITY", "AXIS Z", "勁豪", "EC-05", "FZ"],
+        "三陽": ["三陽", "SYM", "JET", "DRG", "MMBCU", "曼巴", "FIDDLE", "KRN", "MIO", "迪爵", "DUKE", "FNX", "4ICA", "螞蟻", "MAXSYM", "JOYMAX", "TL500", "VIVO", "活力", "Z1", "VEGA", "MII", "GT 125", "GR 125"],
+        "光陽": ["光陽", "KYMCO", "VJR", "MANY", "ROMEO", "KRV", "RACING", "雷霆", "GP", "LIKE", "NICE", "G6", "G5", "AK550", "XCITING", "DOWNTOWN", "CUE", "CHERRY", "俏麗", "CANDY", "IONEX", "大地名流", "名流", "金牌"],
+        "摩特動力": ["PGO", "摩特動力", "J-BUBU", "JBUBU", "TIGRA", "彪虎", "ALPHA MAX", "UR1", "UR2", "BON", "ZAN", "G-MAX"],
+        "鈴木": ["SUZUKI", "台鈴", "SWISH", "SALUTO", "SUI", "GSX", "V-STROM", "GIXXER", "NEX", "TEKKEN", "ADDRESS", "eReady"],
+        "本田": ["HONDA", "本田", "MSX", "MONKEY", "SUPER CUB", "CBR", "CB", "REBEL", "FORZA", "X-ADV", "CRF", "LEAD", "ADV 150", "CT125"],
+        "偉士牌": ["VESPA", "偉士牌", "SPRINT", "PRIMAVERA", "GTS", "LX 125", "S 125", "946"],
+        "宏佳騰": ["宏佳騰", "AEON", "CO-IN", "MY 150", "Ai-1", "Ai-2", "Ai-3", "Ai-4", "STR", "OZS", "ES 150", "ELITE", "3D-350", "GATHER"],
+        "睿能": ["GOGORO", "睿能", "VIVA", "SUPERSPORT", "S2", "S3", "DELIGHT", "PREMIUM", "CROSSOVER"],
+        "川崎": ["KAWASAKI", "川崎", "NINJA", "忍者", "Z400", "Z650", "Z900", "ZX-", "W800", "VULCAN", "VERSYS"],
+        "哈特佛": ["哈特佛", "HARTFORD", "雲豹", "夜鷹", "小雲豹", "MINI 125", "VR 150", "VITA"],
+        "凱旋": ["凱旋", "TRIUMPH", "BONNEVILLE", "STREET TWIN", "TRIDENT", "TIGER", "SPEED TRIPLE", "SCRAMBLER 900", "BOBBER"],
+        "杜卡迪": ["杜卡迪", "DUCATI", "MONSTER", "SCRAMBLER", "PANIGALE", "DIAVEL", "MULTISTRADA", "STREETFIGHTER"],
+        "阿普利亞": ["阿普利亞", "APRILIA", "RS 660", "TUONO", "SR GT"],
+        "寶馬": ["BMW", "寶馬", "G310", "S1000", "R1200", "R1250", "C400", "F900"],
+        "哈雷": ["哈雷", "HARLEY", "SPORTSTER", "SOFTAIL", "STREET 750", "FAT BOY", "IRON 883"],
+        "KTM": ["KTM", "DUKE 390", "DUKE 250", "DUKE 890", "RC 390", "RC 390", "ADVENTURE"],
+        "中華": ["中華", "eMoving", "emoving", "EZ1", "BIONX"]
     }
+    
     for b_name, aliases in brand_map.items():
         for alias in aliases:
             if alias.lower() in search_str.lower():
