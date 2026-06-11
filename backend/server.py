@@ -392,27 +392,31 @@ def parse_price(price_str: str) -> float:
     match = re.search(r'\d+', cleaned)
     return float(match.group()) if match else 0.0
 
-def parse_info_from_title(title: str) -> dict:
+def parse_info_from_text(title: str, text: str) -> dict:
     """
-    從商品標題中提取門市、年份、品牌與排氣量 (CC數)
-    範例：【新北樹林店】2019 山葉 JOG SWEET 115 #8929
+    從商品標題與商品卡片內文中提取門市、年份、品牌、排氣量與里程數
     """
     res = {
         "location": "其他",
         "year": 0,
         "brand": "其他",
-        "displacement": 0
+        "displacement": 0,
+        "mileage": 0.0
     }
+    search_str = f"{title} {text}"
     if not title:
         return res
 
     # 1. 門市解析
-    loc_match = re.search(r'[【\[](.*?)[】\]]', title)
+    loc_match = re.search(r'[【\[](.*?)[】\]]', search_str)
     if loc_match:
         res["location"] = loc_match.group(1).strip()
-        clean_title = title.replace(loc_match.group(0), "")
+        clean_title = search_str.replace(loc_match.group(0), "")
     else:
-        clean_title = title
+        loc_match = re.search(r'([\u4e00-\u9fff\w\-]{2,10}店)', search_str)
+        if loc_match:
+            res["location"] = loc_match.group(1).strip()
+        clean_title = search_str
 
     # 2. 年份解析
     year_match = re.search(r'\b(20\d\d|19\d\d)\b', clean_title)
@@ -435,7 +439,7 @@ def parse_info_from_title(title: str) -> dict:
     }
     for b_name, aliases in brand_map.items():
         for alias in aliases:
-            if alias.lower() in title.lower():
+            if alias.lower() in search_str.lower():
                 res["brand"] = b_name
                 break
         if res["brand"] != "其他":
@@ -443,12 +447,17 @@ def parse_info_from_title(title: str) -> dict:
 
     # 4. 排氣量 (displacement) 解析
     clean_title = re.sub(r'#\d+', '', clean_title)  # 移除車號
-    cc_matches = re.findall(r'\b(\d{2,4})\s*(?:cc|CC)?\b', clean_title)
+    cc_matches = re.findall(r'\b(\d{2,4})\s*(?:cc|CC|c\.c\.)?\b', clean_title, re.IGNORECASE)
     for cc_str in cc_matches:
         cc_val = int(cc_str)
         if 50 <= cc_val <= 1800 and cc_val != res["year"]:
             res["displacement"] = cc_val
             break
+
+    # 5. 里程解析
+    m = re.search(r"(\d{1,3}(?:,\d{3})*)\s*(?:km|公里)", search_str, re.IGNORECASE)
+    if m:
+        res["mileage"] = float(m.group(1).replace(",", ""))
 
     return res
 
@@ -638,8 +647,9 @@ def scrape_products(max_pages: Optional[int] = None, cached_items: Optional[Dict
                 if original_price > 0:
                     discount_rate = (original_price - current_price) / original_price
 
-                # 從標題解析屬性
-                parsed_info = parse_info_from_title(title)
+                # 從標題與卡片內容解析屬性
+                raw_text = card.get_text(separator=" ", strip=True)
+                parsed_info = parse_info_from_text(title, raw_text)
 
                 products.append({
                     "title": title,
@@ -651,7 +661,8 @@ def scrape_products(max_pages: Optional[int] = None, cached_items: Optional[Dict
                     "year": parsed_info["year"],
                     "location": parsed_info["location"],
                     "brand": parsed_info["brand"],
-                    "displacement": parsed_info["displacement"]
+                    "displacement": parsed_info["displacement"],
+                    "mileage": parsed_info["mileage"]
                 })
                 seen_urls.add(full_url)
             
@@ -670,6 +681,9 @@ def scrape_products(max_pages: Optional[int] = None, cached_items: Optional[Dict
     to_fetch_indices = []
     for idx, item in enumerate(products):
         url = item["url"]
+        if item.get("mileage", 0.0) > 0.0:
+            continue
+            
         if cached_items and url in cached_items:
             item["mileage"] = cached_items[url]
         else:

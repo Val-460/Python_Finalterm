@@ -107,7 +107,8 @@ export default function Home() {
       filteredForModels = products.filter(p => p.brand === brandFilter);
     }
     const modelNames = filteredForModels.map(p => getModelName(p)).filter(Boolean);
-    return ['全部', ...Array.from(new Set(modelNames))].sort((a, b) => a.localeCompare(b));
+    const uniqueModels = Array.from(new Set(modelNames)).sort((a, b) => a.localeCompare(b));
+    return ['全部', ...uniqueModels];
   };
 
   // Get model statistics for model analysis
