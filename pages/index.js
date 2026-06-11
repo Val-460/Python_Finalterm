@@ -161,12 +161,12 @@ export default function Home() {
   const [sortAsc, setSortAsc] = useState(true);
 
   // Fetch API URL Helper (detect client/server)
-  const apiBase = ''; // Vercel handles requests to /api/ on the same host
+  const apiBase = 'http://127.0.0.1:8000'; // 強制連接到使用者本機運行的 FastAPI 後端，避免消耗 Vercel 資源
 
   // Helper to log errors to backend logs.txt
   const logErrorToBackend = async (err, context = "") => {
     try {
-      await fetch('/api/v1/log-error', {
+      await fetch(`${apiBase}/api/v1/log-error`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -203,7 +203,7 @@ export default function Home() {
 
   const loadMappings = async () => {
     try {
-      const resp = await fetch('/api/v1/mappings');
+      const resp = await fetch(`${apiBase}/api/v1/mappings`);
       if (resp.ok) {
         const data = await resp.json();
         setMappings(data);
@@ -215,7 +215,7 @@ export default function Home() {
 
   const handleSaveMapping = async (rawName) => {
     try {
-      const resp = await fetch('/api/v1/mappings/update', {
+      const resp = await fetch(`${apiBase}/api/v1/mappings/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -280,7 +280,7 @@ export default function Home() {
 
       // 1. 載入商品列表任務
       const fetchProducts = async () => {
-        const pResp = await fetch('/api/v1/products');
+        const pResp = await fetch(`${apiBase}/api/v1/products`);
         if (!pResp.ok && pResp.status !== 504) throw new Error("尚未爬取商品資料，請執行大數據爬蟲");
         const pData = await safeJson(pResp);
         setProducts(pData);
@@ -290,7 +290,7 @@ export default function Home() {
 
       // 2. 載入 CP 分析中位數任務
       const fetchAnalysis = async () => {
-        const aResp = await fetch('/api/v1/analysis');
+        const aResp = await fetch(`${apiBase}/api/v1/analysis`);
         if (!aResp.ok && aResp.status !== 504) throw new Error("無法獲取市場分析數據");
         const aData = await safeJson(aResp);
         setAnalysis(aData);
@@ -300,7 +300,7 @@ export default function Home() {
 
       // 3. 載入行情統計圖表任務
       const fetchCharts = async () => {
-        const cResp = await fetch('/api/v1/analysis/charts', { method: 'POST' });
+        const cResp = await fetch(`${apiBase}/api/v1/analysis/charts`, { method: 'POST' });
         if (!cResp.ok && cResp.status !== 504) throw new Error("無法生成市場行情分析圖表");
         const cData = await safeJson(cResp);
         setCharts(cData);
@@ -330,7 +330,7 @@ export default function Home() {
     setCrawling(true);
     setError('');
     try {
-      const url = quick ? '/api/v1/crawl?quick=true' : '/api/v1/crawl';
+      const url = quick ? `${apiBase}/api/v1/crawl?quick=true` : `${apiBase}/api/v1/crawl`;
       const resp = await fetch(url, { method: 'POST' });
       
       const text = await resp.text();
@@ -363,7 +363,7 @@ export default function Home() {
     if (crawling) {
       timer = setInterval(async () => {
         try {
-          const resp = await fetch('/api/v1/crawl/status');
+          const resp = await fetch(`${apiBase}/api/v1/crawl/status`);
           if (resp.ok) {
             const data = await resp.json();
             setCrawlStatus(data);
@@ -572,7 +572,7 @@ export default function Home() {
             </button>
 
             <a
-              href="/api/v1/report/excel"
+              href={`${apiBase}/api/v1/report/excel`}
               className="bg-[#2980b9] hover:bg-[#3498db] text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-md inline-block"
             >
               📥 Excel 報表
@@ -1176,17 +1176,17 @@ export default function Home() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-[#121214] p-3 rounded-lg border border-[#30363d] text-center">
                   <h3 className="text-xs font-bold text-[#b2bec3] mb-2">二手機車售價分布直方圖</h3>
-                  <img src={charts.histogram_url} alt="Price Histogram" className="max-w-full rounded-md shadow-md" />
+                  <img src={`${apiBase}${charts.histogram_url}`} alt="Price Histogram" className="max-w-full rounded-md shadow-md" />
                 </div>
 
                 <div className="bg-[#121214] p-3 rounded-lg border border-[#30363d] text-center">
                   <h3 className="text-xs font-bold text-[#b2bec3] mb-2">里程數與售價關係散佈圖</h3>
-                  <img src={charts.scatter_url} alt="Mileage Scatter Plot" className="max-w-full rounded-md shadow-md" />
+                  <img src={`${apiBase}${charts.scatter_url}`} alt="Mileage Scatter Plot" className="max-w-full rounded-md shadow-md" />
                 </div>
 
                 <div className="bg-[#121214] p-3 rounded-lg border border-[#30363d] text-center md:col-span-2">
                   <h3 className="text-xs font-bold text-[#b2bec3] mb-2">熱門在庫品牌市佔率 (Top 5)</h3>
-                  <img src={charts.brand_pie_url} alt="Brand Share Pie Chart" className="max-w-full md:max-w-[60%] mx-auto rounded-md shadow-md" />
+                  <img src={`${apiBase}${charts.brand_pie_url}`} alt="Brand Share Pie Chart" className="max-w-full md:max-w-[60%] mx-auto rounded-md shadow-md" />
                 </div>
               </div>
             ) : (
