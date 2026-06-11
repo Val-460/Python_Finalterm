@@ -16,7 +16,7 @@ echo ========================================================
 echo   [2/2] 正在開啟 Vercel 雲端前端網頁...
 echo ========================================================
 echo 請將下方網址替換為您實際在 Vercel 上的部署網址
-set VERCEL_URL=https://您的專案名稱.vercel.app
+set VERCEL_URL=https://python-finalterm.vercel.app
 start %VERCEL_URL%
 
 echo.
