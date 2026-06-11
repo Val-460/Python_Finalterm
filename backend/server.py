@@ -439,7 +439,14 @@ def scrape_products(max_pages: Optional[int] = None, cached_items: Optional[Dict
     session.headers.update(headers)
     
     page_num = 1
+    start_time = time.time()
+    # Vercel 有 10 秒硬性超時限制，保留 3.5 秒給後續資料庫寫入、圖表與報表生成
+    timeout_limit = 6.5 if os.getenv("VERCEL") == "1" else 9999.0
+    
     while True:
+        if time.time() - start_time > timeout_limit * 0.4:
+            logger.warning("達到 Vercel 超時預警，提前結束頁面掃描。")
+            break
         if max_pages and page_num > max_pages:
             logger.info(f"已達到設定的最大頁面限制 ({max_pages})，停止爬取。")
             break
@@ -597,14 +604,28 @@ def scrape_products(max_pages: Optional[int] = None, cached_items: Optional[Dict
             mileage = fetch_detail_mileage(url)
             products[idx]["mileage"] = mileage
             
-        with ThreadPoolExecutor(max_workers=20 if quick else 10) as executor:
+        import concurrent.futures
+        workers = 40 if os.getenv("VERCEL") == "1" else (20 if quick else 10)
+        with ThreadPoolExecutor(max_workers=workers) as executor:
             futures = [executor.submit(worker, idx) for idx in to_fetch_indices]
             completed_count = 0
-            for fut in futures:
-                fut.result()
+            
+            # 計算剩餘可用的超時時間 (最少給予 0.5 秒)
+            time_left = max(0.5, timeout_limit - (time.time() - start_time) - 0.5)
+            done, not_done = concurrent.futures.wait(futures, timeout=time_left)
+            
+            for fut in done:
+                try:
+                    fut.result()
+                except Exception:
+                    pass
                 completed_count += 1
-                CRAWL_STATUS["status"] = f"爬取里程數: {completed_count}/{total_to_fetch}"
-                CRAWL_STATUS["scraped_count"] = len(products)
+                
+            if not_done:
+                logger.warning(f"超時保護機制啟動，放棄 {len(not_done)} 筆未完成的里程數抓取任務。")
+                
+            CRAWL_STATUS["status"] = f"爬取里程數完成: {completed_count}/{total_to_fetch}"
+            CRAWL_STATUS["scraped_count"] = len(products)
 
     return products
 
