@@ -191,8 +191,89 @@ def get_cleaned_title(title: str) -> str:
             break
 
     # 7. 清理多餘空格
-    clean = re.sub(r'\s+', ' ', clean)
-    return clean.strip()
+    clean = re.sub(r'\s+', ' ', clean).strip()
+
+    # 8. 智慧車款分類與歸一化 (Normalization)
+    # 將字串轉為大寫並去除所有空白，以利正則比對各種變體 (例如 JOG SWEET 變成 JOGSWEET)
+    clean_upper = clean.upper().replace(" ", "")
+    
+    # 常見車系別名對照表 (使用正則表達式比對)
+    model_aliases = {
+        # YAMAHA 勁戰系列
+        r".*勁戰.*六.*|.*CYGNUS.*GRYPHUS.*|.*六.*勁戰.*": "勁戰六代 (CYGNUS GRYPHUS)",
+        r".*勁戰.*五.*|.*五.*勁戰.*": "勁戰五代",
+        r".*勁戰.*四.*|.*四.*勁戰.*": "勁戰四代",
+        r".*勁戰.*三.*|.*三.*勁戰.*": "勁戰三代",
+        r".*勁戰.*二.*|.*二.*勁戰.*": "勁戰二代",
+        r"^.*勁戰.*|.*CYGNUS.*": "勁戰 (CYGNUS)",
+        # YAMAHA 其他
+        r".*JOG.*SWEET.*": "JOG SWEET",
+        r".*JOG.*FS.*": "JOG FS",
+        r"^.*JOG.*": "JOG",
+        r".*FORCE.*2\.0.*": "FORCE 2.0",
+        r"^.*FORCE.*": "FORCE",
+        r".*SMAX.*": "SMAX",
+        r".*AUGUR.*": "AUGUR",
+        r".*VINOORA.*|.*小小兵.*": "VINOORA (小小兵)",
+        r".*LIMI.*": "LIMI",
+        r".*RS.*NEO.*": "RS NEO",
+        r".*RS.*ZERO.*": "RS ZERO",
+        r".*BWS.*R.*": "BWS R",
+        r".*水冷.*BWS.*": "水冷 BWS",
+        r"^.*BWS.*": "BWS",
+        # SYM
+        r".*JET.*SL\+.*|.*JET.*SL.*158.*": "JET SL+ 158",
+        r".*JET.*SL.*": "JET SL",
+        r".*JET.*SR.*": "JET SR",
+        r".*JET.*S.*": "JETS",
+        r".*DRG.*": "DRG",
+        r".*MMBCU.*|.*曼巴.*": "MMBCU (曼巴)",
+        r".*KRN.*": "KRN",
+        r".*FIDDLE.*125.*": "FIDDLE 125",
+        r".*FIDDLE.*115.*": "FIDDLE 115",
+        r".*FIDDLE.*DX.*": "FIDDLE DX",
+        r"^.*FIDDLE.*": "FIDDLE",
+        r".*MIO.*": "MIO",
+        r".*全新迪爵.*|.*新迪爵.*|.*DUKE.*|.*迪爵.*": "迪爵 (DUKE)",
+        r".*FNX.*": "FNX",
+        r".*4ICA.*|.*螞蟻.*": "4ICA (螞蟻)",
+        # KYMCO
+        r".*VJR.*125.*": "VJR 125",
+        r".*VJR.*110.*": "VJR 110",
+        r"^.*VJR.*": "VJR",
+        r".*NEW.*MANY.*": "NEW MANY",
+        r".*MANY.*110.*": "MANY 110",
+        r".*MANY.*125.*": "MANY 125",
+        r".*ROMEO.*": "ROMEO",
+        r"^.*MANY.*": "MANY",
+        r".*KRV.*": "KRV",
+        r".*RACING.*S.*": "RACING S",
+        r"^.*RACING.*|.*雷霆.*": "RACING (雷霆)",
+        r".*GP.*125.*|.*GP.*": "GP 125",
+        r".*LIKE.*": "LIKE",
+        r".*NICE.*": "NICE",
+        r".*G6.*": "G6",
+        r".*KRV.*MOTO.*": "KRV MOTO",
+        # PGO & OTHERS
+        r".*J-?BUBU.*": "J-BUBU",
+        r".*TIGRA.*|.*彪虎.*": "TIGRA (彪虎)",
+        r".*ALPHA.*MAX.*": "ALPHA MAX",
+        r".*UR1.*": "UR1",
+        # GOGORO
+        r".*VIVA.*MIX.*": "GOGORO VIVA MIX",
+        r".*VIVA.*XL.*": "GOGORO VIVA XL",
+        r".*VIVA.*": "GOGORO VIVA",
+        r".*S2.*": "GOGORO S2",
+        r".*GOGORO.*2.*": "GOGORO 2",
+        r".*GOGORO.*3.*": "GOGORO 3",
+        r".*SUPERSPORT.*": "GOGORO SUPERSPORT",
+    }
+    
+    for pattern, normalized_name in model_aliases.items():
+        if re.search(pattern, clean_upper):
+            return normalized_name
+            
+    return clean
 
 
 # =====================================================================
