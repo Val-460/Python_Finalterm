@@ -51,12 +51,14 @@ class APIClient:
             raise Exception(response.json().get("detail", "取得圖表資訊失敗"))
         data = response.json()
         return {
-            "histogram_url": f"{self.base_url}{data['histogram_url']}",
-            "scatter_url": f"{self.base_url}{data['scatter_url']}",
-            "brand_pie_url": f"{self.base_url}{data['brand_pie_url']}"
+            "histogram_url": f"{self.base_url}{data['histogram_url']}" if data.get('histogram_url') else "",
+            "scatter_url": f"{self.base_url}{data['scatter_url']}" if data.get('scatter_url') else "",
+            "brand_pie_url": f"{self.base_url}{data['brand_pie_url']}" if data.get('brand_pie_url') else ""
         }
 
     def download_chart_image(self, full_url: str) -> bytes:
+        if not full_url:
+            return b""
         response = requests.get(full_url, timeout=10)
         if response.status_code != 200:
             raise Exception("下載圖表影像失敗")
@@ -77,11 +79,16 @@ class APIClient:
 # =====================================================================
 # 2. 圖片轉換與門市資料 (CONSTANTS & IMAGE UTILS)
 # =====================================================================
-def convert_bytes_to_tk_image(img_bytes: bytes, target_width: int = 480, target_height: int = 320) -> ImageTk.PhotoImage:
+def convert_bytes_to_tk_image(img_bytes: bytes, target_width: int = 480, target_height: int = 320) -> Optional[ImageTk.PhotoImage]:
     """將二進位影像流轉換為 Pillow Tkinter PhotoImage 並等比縮放"""
-    image = Image.open(io.BytesIO(img_bytes))
-    image_resized = image.resize((target_width, target_height), Image.Resampling.LANCZOS)
-    return ImageTk.PhotoImage(image_resized)
+    if not img_bytes:
+        return None
+    try:
+        image = Image.open(io.BytesIO(img_bytes))
+        image_resized = image.resize((target_width, target_height), Image.Resampling.LANCZOS)
+        return ImageTk.PhotoImage(image_resized)
+    except Exception:
+        return None
 
 BRANCHES = [
     {"name": "新北中和店", "address": "新北市中和區景平路 159 號", "phone": "02-2242-2321", "hours": "10:00 - 21:00", "line": "https://line.me/ti/p/2motor_zhonghe"},
@@ -683,14 +690,23 @@ class MotorAnalysisApp:
 
         # 影像載入與快取
         self.hist_image = convert_bytes_to_tk_image(hist_bytes, 480, 320)
-        self.lbl_hist_img.configure(image=self.hist_image, text="")
-        
+        if self.hist_image:
+            self.lbl_hist_img.configure(image=self.hist_image, text="")
+        else:
+            self.lbl_hist_img.configure(image="", text="暫無圖表數據 (請先執行爬蟲)")
+            
         self.scatter_image = convert_bytes_to_tk_image(scatter_bytes, 480, 320)
-        self.lbl_scatter_img.configure(image=self.scatter_image, text="")
+        if self.scatter_image:
+            self.lbl_scatter_img.configure(image=self.scatter_image, text="")
+        else:
+            self.lbl_scatter_img.configure(image="", text="暫無圖表數據 (請先執行爬蟲)")
 
         self.brand_pie_image = convert_bytes_to_tk_image(pie_bytes, 480, 320)
-        self.lbl_pie_img.configure(image=self.brand_pie_image, text="")
-        
+        if self.brand_pie_image:
+            self.lbl_pie_img.configure(image=self.brand_pie_image, text="")
+        else:
+            self.lbl_pie_img.configure(image="", text="暫無圖表數據 (請先執行爬蟲)")
+            
         self.progress_text.set("大數據與分析圖表載入完畢！")
         messagebox.showinfo("載入成功", "數據與市場統計圖表載入成功！")
 
@@ -699,9 +715,6 @@ class MotorAnalysisApp:
         messagebox.showerror("載入失敗", f"讀取數據失敗: {err_msg}")
         self.progress_text.set(f"載入失敗: {err_msg}")
 
-    # =====================================================================
-    # SEARCH FILTER & SORTING (TAB 2)
-    # =====================================================================
     def apply_filters(self):
         brand = self.filter_brand.get()
         location = self.filter_location.get()
