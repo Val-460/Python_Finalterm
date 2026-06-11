@@ -161,7 +161,7 @@ export default function Home() {
   const [sortAsc, setSortAsc] = useState(true);
 
   // Fetch API URL Helper (detect client/server)
-  const apiBase = 'http://127.0.0.1:8000'; // 強制連接到使用者本機運行的 FastAPI 後端，避免消耗 Vercel 資源
+  const apiBase = ''; // Vercel handles requests to /api/ on the same host
 
   // Helper to log errors to backend logs.txt
   const logErrorToBackend = async (err, context = "") => {
