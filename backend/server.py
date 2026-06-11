@@ -198,6 +198,7 @@ def get_cleaned_title(title: str) -> str:
     clean_upper = clean.upper().replace(" ", "")
     
     # 常見車系別名對照表 (使用正則表達式比對)
+    # 根據需求：忽略排氣量與特仕配備後綴，將同款車強制歸一
     model_aliases = {
         # YAMAHA 勁戰系列
         r".*勁戰.*六.*|.*CYGNUS.*GRYPHUS.*|.*六.*勁戰.*": "勁戰六代 (CYGNUS GRYPHUS)",
@@ -210,63 +211,48 @@ def get_cleaned_title(title: str) -> str:
         r".*JOG.*SWEET.*": "JOG SWEET",
         r".*JOG.*FS.*": "JOG FS",
         r"^.*JOG.*": "JOG",
-        r".*FORCE.*2\.0.*": "FORCE 2.0",
-        r"^.*FORCE.*": "FORCE",
+        r"^.*FORCE.*": "FORCE",  # 涵蓋 FORCE 與 FORCE 2.0
         r".*SMAX.*": "SMAX",
         r".*AUGUR.*": "AUGUR",
         r".*VINOORA.*|.*小小兵.*": "VINOORA (小小兵)",
         r".*LIMI.*": "LIMI",
         r".*RS.*NEO.*": "RS NEO",
         r".*RS.*ZERO.*": "RS ZERO",
-        r".*BWS.*R.*": "BWS R",
-        r".*水冷.*BWS.*": "水冷 BWS",
-        r"^.*BWS.*": "BWS",
+        r"^.*BWS.*": "BWS",      # 涵蓋 BWS R, 水冷 BWS
         # SYM
-        r".*JET.*SL\+.*|.*JET.*SL.*158.*": "JET SL+ 158",
-        r".*JET.*SL.*": "JET SL",
+        r".*JET.*SL.*|.*JET.*SL\+.*": "JET SL", # 涵蓋 JET SL 與 JET SL+ 158
         r".*JET.*SR.*": "JET SR",
         r".*JET.*S.*": "JETS",
         r".*DRG.*": "DRG",
         r".*MMBCU.*|.*曼巴.*": "MMBCU (曼巴)",
         r".*KRN.*": "KRN",
-        r".*FIDDLE.*125.*": "FIDDLE 125",
-        r".*FIDDLE.*115.*": "FIDDLE 115",
-        r".*FIDDLE.*DX.*": "FIDDLE DX",
-        r"^.*FIDDLE.*": "FIDDLE",
+        r"^.*FIDDLE.*": "FIDDLE", # 涵蓋 FIDDLE 115, 125, DX
         r".*MIO.*": "MIO",
         r".*全新迪爵.*|.*新迪爵.*|.*DUKE.*|.*迪爵.*": "迪爵 (DUKE)",
         r".*FNX.*": "FNX",
         r".*4ICA.*|.*螞蟻.*": "4ICA (螞蟻)",
         # KYMCO
-        r".*VJR.*125.*": "VJR 125",
-        r".*VJR.*110.*": "VJR 110",
-        r"^.*VJR.*": "VJR",
-        r".*NEW.*MANY.*": "NEW MANY",
-        r".*MANY.*110.*": "MANY 110",
-        r".*MANY.*125.*": "MANY 125",
-        r".*ROMEO.*": "ROMEO",
-        r"^.*MANY.*": "MANY",
-        r".*KRV.*": "KRV",
-        r".*RACING.*S.*": "RACING S",
-        r"^.*RACING.*|.*雷霆.*": "RACING (雷霆)",
-        r".*GP.*125.*|.*GP.*": "GP 125",
+        r"^.*VJR.*": "VJR",       # 涵蓋 VJR 110, 125
+        r"^.*MANY.*": "MANY",     # 涵蓋 MANY 110, 125, NEW MANY, ROMEO 等衍生
+        r".*KRV.*": "KRV",        # 涵蓋 KRV, KRV MOTO
+        r"^.*RACING.*|.*雷霆.*": "RACING (雷霆)", # 涵蓋 RACING S, RACING
+        r".*GP.*": "GP",          # 涵蓋 GP 125 等
         r".*LIKE.*": "LIKE",
         r".*NICE.*": "NICE",
         r".*G6.*": "G6",
-        r".*KRV.*MOTO.*": "KRV MOTO",
         # PGO & OTHERS
         r".*J-?BUBU.*": "J-BUBU",
         r".*TIGRA.*|.*彪虎.*": "TIGRA (彪虎)",
         r".*ALPHA.*MAX.*": "ALPHA MAX",
         r".*UR1.*": "UR1",
-        # GOGORO
+        # GOGORO (依據代數合併)
         r".*VIVA.*MIX.*": "GOGORO VIVA MIX",
         r".*VIVA.*XL.*": "GOGORO VIVA XL",
         r".*VIVA.*": "GOGORO VIVA",
-        r".*S2.*": "GOGORO S2",
-        r".*GOGORO.*2.*": "GOGORO 2",
-        r".*GOGORO.*3.*": "GOGORO 3",
         r".*SUPERSPORT.*": "GOGORO SUPERSPORT",
+        r".*S2.*|.*GOGORO.*2.*": "GOGORO 2", # 涵蓋 S2 與 2
+        r".*GOGORO.*3.*": "GOGORO 3",
+        r".*GOGORO.*1.*": "GOGORO 1",
     }
     
     for pattern, normalized_name in model_aliases.items():
@@ -495,8 +481,9 @@ def clean_mileage_val(mileage_str: str) -> float:
         return 0.0
 
 
-def fetch_detail_mileage(url: str) -> float:
-    """透過 Requests 抓取機車詳情頁並正則解析里程數"""
+def fetch_detail_info(url: str) -> dict:
+    """透過 Requests 抓取機車詳情頁並正則解析里程數與排氣量"""
+    res = {"mileage": 0.0, "displacement": 0}
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
@@ -506,10 +493,27 @@ def fetch_detail_mileage(url: str) -> float:
             # 尋找 HTML 原始碼中如 ◉ 里程數：約 35,XXX 公里 之特徵
             match = re.search(r'里程數[：:][約]?\s*([\d,X+]+)\s*公里', resp.text)
             if match:
-                return clean_mileage_val(match.group(1))
+                res["mileage"] = clean_mileage_val(match.group(1))
+            
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(resp.text, "html.parser")
+            desc_elem = soup.select_one(".product-single__description, .product__description")
+            search_text = desc_elem.get_text(separator=" ", strip=True) if desc_elem else soup.get_text(separator=" ", strip=True)
+            
+            cc_matches = re.findall(r'\b(\d{2,4})\s*(?:cc|CC|c\.c\.)\b', search_text, re.IGNORECASE)
+            for cc_str in cc_matches:
+                cc_val = int(cc_str)
+                if 50 <= cc_val <= 1800:
+                    res["displacement"] = cc_val
+                    break
+                    
+            if res["mileage"] == 0.0:
+                m_match = re.search(r"(\d{1,3}(?:,\d{3})*)\s*(?:km|公里)", search_text, re.IGNORECASE)
+                if m_match:
+                    res["mileage"] = float(m_match.group(1).replace(",", ""))
     except Exception as e:
-        logger.error(f"抓取里程數失敗 {url}: {e}")
-    return 0.0
+        logger.error(f"抓取詳細資訊失敗 {url}: {e}")
+    return res
 
 def scrape_products(max_pages: Optional[int] = None, cached_items: Optional[Dict[str, float]] = None, quick: bool = False) -> List[Dict[str, Any]]:
     """以 Requests + BeautifulSoup 爬取貳輪部品電商所有頁面的商品數據，並以多線程抓取新上架車輛的里程"""
@@ -677,27 +681,35 @@ def scrape_products(max_pages: Optional[int] = None, cached_items: Optional[Dict
             logger.error(f"爬取第 {page_num} 頁時發生錯誤: {str(e)}")
             break
 
-    # 第二層：多線程抓取全新商品里程數
+    # 第二層：多線程抓取全新商品里程數與排氣量
     to_fetch_indices = []
     for idx, item in enumerate(products):
         url = item["url"]
-        if item.get("mileage", 0.0) > 0.0:
-            continue
+        needs_fetch = False
+        
+        if item.get("mileage", 0.0) == 0.0:
+            if cached_items and url in cached_items:
+                item["mileage"] = cached_items[url]
+            if item.get("mileage", 0.0) == 0.0:
+                needs_fetch = True
+                
+        if item.get("displacement", 0) == 0:
+            needs_fetch = True
             
-        if cached_items and url in cached_items:
-            item["mileage"] = cached_items[url]
-        else:
-            item["mileage"] = 0.0
+        if needs_fetch:
             to_fetch_indices.append(idx)
             
     total_to_fetch = len(to_fetch_indices)
     if total_to_fetch > 0:
-        logger.info(f"偵測到 {total_to_fetch} 筆全新上架商品，啟動多線程爬取里程...")
+        logger.info(f"偵測到 {total_to_fetch} 筆資料缺失里程或排氣量，啟動多線程爬取詳細頁面...")
         
         def worker(idx):
             url = products[idx]["url"]
-            mileage = fetch_detail_mileage(url)
-            products[idx]["mileage"] = mileage
+            info = fetch_detail_info(url)
+            if products[idx]["mileage"] == 0.0:
+                products[idx]["mileage"] = info["mileage"]
+            if products[idx]["displacement"] == 0:
+                products[idx]["displacement"] = info["displacement"]
             
         import concurrent.futures
         workers = 40 if os.getenv("VERCEL") == "1" else (20 if quick else 10)
@@ -719,9 +731,16 @@ def scrape_products(max_pages: Optional[int] = None, cached_items: Optional[Dict
             if not_done:
                 logger.warning(f"超時保護機制啟動，放棄 {len(not_done)} 筆未完成的里程數抓取任務。")
                 
-            CRAWL_STATUS["status"] = f"爬取里程數完成: {completed_count}/{total_to_fetch}"
-            CRAWL_STATUS["scraped_count"] = len(products)
+            CRAWL_STATUS["status"] = f"爬取詳細資訊完成: {completed_count}/{total_to_fetch}"
+            
+    # 3. 過濾掉里程數或排氣量仍為 0 的無效資料 (因使用者要求里程和排氣量不能是0)
+    original_len = len(products)
+    products = [p for p in products if p.get("mileage", 0.0) > 0.0 and p.get("displacement", 0) > 0]
+    filtered_count = original_len - len(products)
+    if filtered_count > 0:
+        logger.info(f"已過濾 {filtered_count} 筆里程或排氣量為 0 的無效資料。")
 
+    CRAWL_STATUS["scraped_count"] = len(products)
     return products
 
 # =====================================================================
