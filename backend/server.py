@@ -1375,27 +1375,28 @@ finally:
     db.close()
 
 # 自癒性報表生成 (如果資料庫已有數據，自動預先產出 Excel 與 HTML 報表)
-try:
-    db = SessionLocal()
-    db_products = db.query(Product).all()
-    if db_products:
-        reports_dir = os.path.join(STATIC_DIR, "reports")
-        excel_path = os.path.join(reports_dir, "report.xlsx")
-        html_path = os.path.join(reports_dir, "report.html")
-        if not os.path.exists(excel_path) or not os.path.exists(html_path):
-            os.makedirs(reports_dir, exist_ok=True)
-            logger.info("檢測到資料庫有數據但報表檔案缺失，正在自動生成 Excel 與 HTML 報表...")
-            excel_data = generate_excel_report_data(db_products)
-            with open(excel_path, "wb") as f:
-                f.write(excel_data)
-            html_data = generate_html_report_data(db_products)
-            with open(html_path, "w", encoding="utf-8") as f:
-                f.write(html_data)
-            logger.info("自動補報表完成！")
-except Exception as startup_err:
-    logger.error(f"啟動時報表自癒失敗: {startup_err}")
-finally:
-    db.close()
+if os.getenv("VERCEL") != "1":
+    try:
+        db = SessionLocal()
+        db_products = db.query(Product).all()
+        if db_products:
+            reports_dir = os.path.join(STATIC_DIR, "reports")
+            excel_path = os.path.join(reports_dir, "report.xlsx")
+            html_path = os.path.join(reports_dir, "report.html")
+            if not os.path.exists(excel_path) or not os.path.exists(html_path):
+                os.makedirs(reports_dir, exist_ok=True)
+                logger.info("檢測到資料庫有數據但報表檔案缺失，正在自動生成 Excel 與 HTML 報表...")
+                excel_data = generate_excel_report_data(db_products)
+                with open(excel_path, "wb") as f:
+                    f.write(excel_data)
+                html_data = generate_html_report_data(db_products)
+                with open(html_path, "w", encoding="utf-8") as f:
+                    f.write(html_data)
+                logger.info("自動補報表完成！")
+    except Exception as startup_err:
+        logger.error(f"啟動時報表自癒失敗: {startup_err}")
+    finally:
+        db.close()
 
 if __name__ == "__main__":
     uvicorn.run("server:app", host="127.0.0.1", port=8000, reload=True)

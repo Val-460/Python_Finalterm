@@ -265,11 +265,24 @@ export default function Home() {
     };
 
     try {
+      // 安全的 JSON 解析器，防止 Vercel 504 HTML 導致解析崩潰
+      const safeJson = async (resp) => {
+        const text = await resp.text();
+        try {
+          return JSON.parse(text);
+        } catch (e) {
+          if (text.includes("<!DOCTYPE") || text.includes("<html")) {
+            throw new Error("Vercel 雲端伺服器運算超時 (504 Gateway Timeout)，請稍後再試或使用單機版");
+          }
+          throw new Error("伺服器回傳了無效的資料格式");
+        }
+      };
+
       // 1. 載入商品列表任務
       const fetchProducts = async () => {
         const pResp = await fetch('/api/v1/products');
-        if (!pResp.ok) throw new Error("尚未爬取商品資料，請執行大數據爬蟲");
-        const pData = await pResp.json();
+        if (!pResp.ok && pResp.status !== 504) throw new Error("尚未爬取商品資料，請執行大數據爬蟲");
+        const pData = await safeJson(pResp);
         setProducts(pData);
         updateProgress('成功載入機車商品清單！');
         return pData;
@@ -278,8 +291,8 @@ export default function Home() {
       // 2. 載入 CP 分析中位數任務
       const fetchAnalysis = async () => {
         const aResp = await fetch('/api/v1/analysis');
-        if (!aResp.ok) throw new Error("無法獲取市場分析數據");
-        const aData = await aResp.json();
+        if (!aResp.ok && aResp.status !== 504) throw new Error("無法獲取市場分析數據");
+        const aData = await safeJson(aResp);
         setAnalysis(aData);
         updateProgress('成功計算 CP 值大數據統計指標！');
         return aData;
@@ -288,15 +301,17 @@ export default function Home() {
       // 3. 載入行情統計圖表任務
       const fetchCharts = async () => {
         const cResp = await fetch('/api/v1/analysis/charts', { method: 'POST' });
-        if (!cResp.ok) throw new Error("無法生成市場行情分析圖表");
-        const cData = await cResp.json();
+        if (!cResp.ok && cResp.status !== 504) throw new Error("無法生成市場行情分析圖表");
+        const cData = await safeJson(cResp);
         setCharts(cData);
         updateProgress('成功生成並渲染行情統計圖表！');
         return cData;
       };
 
-      // 並行執行三個請求，極速加載
-      await Promise.all([fetchProducts(), fetchAnalysis(), fetchCharts()]);
+      // 循序漸進執行，避免 Vercel 伺服器因併發 Cold Start 導致資源耗盡崩潰
+      await fetchProducts();
+      await fetchAnalysis();
+      await fetchCharts();
 
       setDataLoadingStatus('所有資料載入與 UI 渲染成功！');
       // 確保 100% 進度條動畫渲染完成後才關閉遮罩，防止閃爍
@@ -317,7 +332,18 @@ export default function Home() {
     try {
       const url = quick ? '/api/v1/crawl?quick=true' : '/api/v1/crawl';
       const resp = await fetch(url, { method: 'POST' });
-      const data = await resp.json();
+      
+      const text = await resp.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch(e) {
+        if (text.includes("<!DOCTYPE") || text.includes("<html")) {
+          throw new Error("爬蟲正在背景執行，但 Vercel 連線已超時 (504)，請稍後重新整理網頁查看進度");
+        }
+        throw new Error("伺服器回傳錯誤的格式");
+      }
+
       if (resp.ok && data.status === 'success') {
         loadData();
       } else {
