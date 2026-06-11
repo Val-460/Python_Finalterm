@@ -1186,6 +1186,19 @@ def get_charts_endpoint(db: Session = Depends(get_db)):
             scatter_url="",
             brand_pie_url=""
         )
+        
+    hist_path = os.path.join(CHARTS_DIR, "price_histogram.png")
+    scatter_path = os.path.join(CHARTS_DIR, "discount_scatter.png")
+    brand_pie_path = os.path.join(CHARTS_DIR, "brand_pie.png")
+    
+    # 優化：Vercel 的運算能力較弱，如果圖表檔案已存在則直接回傳，避免每次請求都重新繪圖導致超時崩潰 (<!DOCTYPE... is not valid JSON)
+    if os.path.exists(hist_path) and os.path.exists(scatter_path) and os.path.exists(brand_pie_path):
+        return ChartResponse(
+            histogram_url="/static/charts/price_histogram.png",
+            scatter_url="/static/charts/discount_scatter.png",
+            brand_pie_url="/static/charts/brand_pie.png"
+        )
+
     charts = generate_charts(products)
     return ChartResponse(
         histogram_url=f"/static/charts/{charts['histogram']}",
